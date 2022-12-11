@@ -25,6 +25,7 @@ a + b *
 
 call_me("today",
         "tomorrow")
+
 array = [
   9.9,
   10,
@@ -32,9 +33,10 @@ array = [
 ]
 
 new_hash = {
-  frog: 12,
-  daft: 92,
-  egg: 99
+  long_ugly_name:  9,
+  frog:    12,
+  daft:           92,
+  egg:            99
 }
 
 hazy = 99 if europe != asia
