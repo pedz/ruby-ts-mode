@@ -9,11 +9,13 @@ This is where I am going to keep notes as I develop the
 
 I'm hoping not to forget some steps I did...
 
-1) a. =git clone git@github.com:casouri/tree-sitter-module.git=
-   b. =cd tree-sitter-module=
-   c. =./build.sh ruby=
-   d. =mkdir ~/.config/emacs/tree-sitter=
-   e. =mv dist/libtree-sitter-ruby.dylib ~/.config/emacs/tree-sitter=
+1) Initial set up:
+   
+   1. =git clone git@github.com:casouri/tree-sitter-module.git=
+   2. =cd tree-sitter-module=
+   3. =./build.sh ruby=
+   4. =mkdir ~/.config/emacs/tree-sitter=
+   5. =mv dist/libtree-sitter-ruby.dylib ~/.config/emacs/tree-sitter=
 
 2) Loaded a Ruby file and did ~M-: (treesit-parser-create 'ruby)~
    which returned ~#<treesit-parser for ruby>~... I guess that's good.
