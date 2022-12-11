@@ -1,0 +1,25 @@
+#+title: Ruby Tree Sitter Mode
+
+* Introduction
+
+This is where I am going to keep notes as I develop the
+~ruby-ts-mode.el~.
+
+* Steps
+
+I'm hoping not to forget some steps I did...
+
+1) a. =git clone git@github.com:casouri/tree-sitter-module.git=
+   b. =cd tree-sitter-module=
+   c. =./build.sh ruby=
+   d. =mkdir ~/.config/emacs/tree-sitter=
+   e. =mv dist/libtree-sitter-ruby.dylib ~/.config/emacs/tree-sitter=
+
+2) Loaded a Ruby file and did ~M-: (treesit-parser-create 'ruby)~
+   which returned ~#<treesit-parser for ruby>~... I guess that's good.
+   
+3) ~(treesit-parser-list)~ to check the list of parsers for the
+   current buffer.
+
+4) ~M-x treesit-inspect-mode~ and it seemed happy.
+   
