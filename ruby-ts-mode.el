@@ -1,3 +1,5 @@
+;;; ruby-ts-mode.el --- tree-sitter support for Ruby
+
 ;;; This is currently a work in progress.  My intent is to release it
 ;;; with whatever copyright notice Free Software Foundation,
 ;;; Inc. wants.
@@ -18,6 +20,9 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+;;
 
 ;;; Code:
 
@@ -42,18 +47,6 @@
 (defcustom ruby-ts-mode-indent-style 'base
   "Style used for indentation.
 
-The selected style could be one of Ruby.  If one of the supplied
-styles doesn't suffice a function could be set instead.  This
-function is expected return a list that follows the form of
-`treesit-simple-indent-rules'."
-  :version "29.1"
-  :type '(choice (symbol :tag "Base" 'base)
-                 (function :tag "A function for user customized style" ignore))
-  :group 'ruby)
-
-(defcustom ruby-ts-mode-indent-style 'gnu
-  "Style used for indentation.
-
 Currently can only be set to BASE.  If one of the supplied styles
 doesn't suffice a function could be set instead.  This function
 is expected return a list that follows the form of
@@ -72,7 +65,7 @@ is expected return a list that follows the form of
     (((class color) (min-colors 16) (background dark))  :foreground "LightSalmon")
     (((class color) (min-colors 8)) :foreground "green")
     (t :slant italic))
-  "Font Lock mode face used in ruby-ts-mode to highlight assignments to constants."
+  "Font Lock face used in `ruby-ts-mode' to highlight assignments to constants."
   :group 'font-lock-faces)
 
 (defface ruby-ts-mode--assignment-face
@@ -84,7 +77,7 @@ is expected return a list that follows the form of
     (((class color) (min-colors 16) (background dark))  :foreground "LightSalmon")
     (((class color) (min-colors 8)) :foreground "green")
     (t :slant italic))
-  "Font Lock mode face used in ruby-ts-mode to hightlight assignments."
+  "Font Lock face used in `ruby-ts-mode' to hightlight assignments."
   :group 'font-lock-faces)
 
 (defvar ruby-ts-mode--syntax-table
@@ -343,25 +336,26 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
     `((base ,@common))))
 
 (defun ruby-ts-mode--class-or-module-p (node)
-  "Predicate returns turthy if NODE is a class or module"
+  "Predicate if NODE is a class or module."
   (string-match-p "class\\|module" (treesit-node-type node)))
 
 (defun ruby-ts-mode--get-name (node)
-  "Returns the text of the `name' field of NODE"
+  "Return the text of the `name' field of NODE."
   (treesit-node-text (treesit-node-child-by-field-name node "name")))
 
 (defun ruby-ts-mode--full-name (node)
-  "Returns the fully qualified name of NODE"
-  (let* ((name (get-name node))
+  "Return the fully qualified name of NODE."
+  (let* ((name (ruby-ts-mode--get-name node))
          (delimiter "#"))
     (while (setq node (treesit-parent-until node #'ruby-ts-mode--class-or-module-p))
-      (setq name (concat (get-name node) delimiter name))
+      (setq name (concat (ruby-ts-mode--get-name node) delimiter name))
       (setq delimiter "::"))
     name))
 
 (defun ruby-ts-mode--imenu-helper (node)
-  "Helper for `ruby-ts-mode--imenu' converting a treesit sparse tree
-  into a list of imenu ( name . pos ) nodes"
+  "Convert a treesit sparse tree NODE in an imenu list.
+Helper for `ruby-ts-mode--imenu' which converts a treesit sparse
+NODE into a list of imenu ( name . pos ) nodes"
   (let* ((ts-node (car node))
          (subtrees (mapcan #'ruby-ts-mode--imenu-helper (cdr node)))
          (name (when ts-node
@@ -448,3 +442,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
   (setq-local treesit-font-lock-settings (ruby-ts-mode--font-lock-settings 'ruby))
 
   (treesit-major-mode-setup))
+
+(provide 'ruby-ts-mode)
+
+;;; ruby-ts-mode.el ends here
