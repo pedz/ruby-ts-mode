@@ -37,13 +37,6 @@
   :safe 'integerp
   :group 'ruby)
 
-(defcustom ruby-ts-indent-tabs-mode nil
-  "Indentation can insert tabs in Ruby TS mode if this is non-nil."
-  :version "29.1"
-  :type 'boolean
-  :safe 'booleanp
-  :group 'ruby)
-
 (defcustom ruby-ts-mode-indent-style 'base
   "Style used for indentation.
 
@@ -432,8 +425,6 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
   (setq-local comment-start "# ")
   (setq-local comment-end "")
   (setq-local comment-start-skip "#+ *")
-
-  (setq indent-tabs-mode ruby-ts-indent-tabs-mode)
 
   (setq-local treesit-simple-indent-rules
               (ruby-ts-mode--set-indent-style 'ruby))
