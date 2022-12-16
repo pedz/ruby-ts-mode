@@ -1,4 +1,4 @@
-;;; ruby-ts-mode.el --- tree-sitter support for Ruby
+;;; ruby-ts-mode.el --- tree-sitter support for Ruby  -*- lexical-binding: t; -*-
 
 ;;; This is currently a work in progress.  My intent is to release it
 ;;; with whatever copyright notice Free Software Foundation,
@@ -47,6 +47,54 @@ is expected return a list that follows the form of
   :version "29.1"
   :type '(choice (symbol :tag "Base" 'base)
                  (function :tag "A function for user customized style" ignore))
+  :group 'ruby)
+
+(defcustom ruby-ts-mode-right-justify-arrays t
+  "Right justify elements in an array.
+
+e.g.             or
+  array = [            array = [   145,
+       145,                      21110,
+     21110,                         11]
+        11
+    ]
+
+verses           or
+
+  array = [            array = [145,
+    145,                 21110,
+    21110,               11]
+    11
+    ]"
+  :type 'boolean
+  :group 'ruby)
+
+(defcustom ruby-ts-mode-indent-split-exp-by-term t
+  "Indent expressions split across lines as `ruby-mode' did.
+
+If set to true, long expressions that are split across lines will be
+indented like `enh-ruby-mode' would indent the lines which is similar
+to `c-mode'.  Thus:
+
+with_paren = (a + b *
+              c * d +
+              12)
+
+without_paren = a + b *
+  c * d +
+  12
+
+If set to nil, long expressions are indented based upon the expression
+parsed hierarchy which is similar to how `ruby-mode' indented.  Thus:
+
+with_paren = (a + b *
+                  c * d +
+              12)
+
+without_paren = a + b *
+                    c * d +
+                12"
+  :type 'boolean
   :group 'ruby)
 
 (defface ruby-ts-mode--constant-assignment-face
@@ -274,7 +322,60 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
    )
   )
 
-(defun ruby-ts-mode--indent-styles (language)
+(defun treesit-type-pred (regexp)
+  "Return predicate taking a node returning non-nil if REGEXP matches type of node."
+  (lambda (node)
+    (string-match-p regexp (treesit-node-type node))))
+
+(defun parent-node (&rest _)
+  "Return the parent node matching ident rule."
+  (lambda (_n parent &rest _)
+    parent))
+
+(defun bol (pred)
+  "Return bol of PRED.
+PRED should take (node parent bol &rest rest) and return a node"
+  (lambda (node parent bol &rest rest)
+    (save-excursion
+      (goto-char (treesit-node-start (funcall pred node parent bol rest)))
+      (back-to-indentation)
+      (point))))
+
+(defun ancestor-start (type)
+  "Return start of closest ancestor matching regexp TYPE."
+  (lambda (node &rest _)
+    (treesit-node-start (treesit-parent-until node (treesit-type-pred type)))))
+
+(defun ancestor-is (type)
+  "Check that ancestor's type matches regexp TYPE."
+  (lambda (node &rest _)
+    (treesit-parent-until node (treesit-type-pred type))))
+
+(defalias 'ancestor-node #'ancestor-is
+  "Return ancestor node whose type matches regexp TYPE.")
+
+(defun ruby-ts-mode--right-justify-array-leaf ( node parent &rest _)
+  "Right justify leaf NODE within PARENT array."
+  (let* ((children (treesit-node-children parent t))
+         (open-bracket (nth 0 (treesit-node-children parent nil)))
+         (first-child (nth 0 children))
+         (same-line (equal (line-number-at-pos (treesit-node-start open-bracket))
+                           (line-number-at-pos (treesit-node-start first-child))))
+         (max-length (apply #'max (mapcar (lambda ( child )
+                                            (- (treesit-node-end child) (treesit-node-start child)))
+                                          children)))
+         (node-length (- (treesit-node-end node) (treesit-node-start node)))
+         (grand-parent-bol (save-excursion
+                             (goto-char (treesit-node-start (treesit-node-parent parent)))
+                             (back-to-indentation)
+                             (point)))
+         (align-column (if same-line
+                           (- (+ (treesit-node-end open-bracket) max-length 1) ruby-ts-mode-indent-offset)
+                         (+ grand-parent-bol max-length 1))))
+
+    (- align-column node-length)))
+
+(defun ruby-ts-mode--indent-styles (_language)
   "Indent rules supported by `ruby-ts-mode'.
 Currently LANGUAGE is ignored but should be set to `ruby'"
   (let ((common
@@ -285,10 +386,19 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((node-is ")") parent 0)
            ((node-is "end") grand-parent 0)
 
+           ,@(if ruby-ts-mode-right-justify-arrays
+                 `(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
+                    ruby-ts-mode--right-justify-array-leaf ruby-ts-mode-indent-offset)
+                   ((n-p-gp "]" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)))
+
            ;; method parameters with and without '('
            ((query "(method_parameters \"(\" _ @indent)") first-sibling 1)
            ((parent-is "method_parameters") first-sibling 0)
 
+
+           ,@(if ruby-ts-mode-indent-split-exp-by-term
+                 `(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
+                   ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
 
            ((node-is "body_statement") parent ruby-ts-mode-indent-offset)
            ((parent-is "body_statement") first-sibling 0)
@@ -299,10 +409,10 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp nil "then" "when") grand-parent ruby-ts-mode-indent-offset)
 
            ;; if / unless unless expressions
-           ((node-is "else") parent-bol 0)
+           ((node-is "else")  parent-bol 0)
            ((node-is "elsif") parent-bol 0)
            ((node-is "when")  parent-bol 0)
-           ((parent-is "then") parent-bol ruby-ts-mode-indent-offset)
+           ((ancestor-is "then") (bol (ancestor-node "if")) ruby-ts-mode-indent-offset)
            ((parent-is "else") parent-bol ruby-ts-mode-indent-offset)
            ((parent-is "elsif") parent-bol ruby-ts-mode-indent-offset)
 
@@ -412,7 +522,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
                 ( bracket delimiter error function operator variable)))
   )
 
-(define-derived-mode ruby-ts-mode ruby-ts-base-mode "Ruby"
+(define-derived-mode ruby-ts-mode ruby-ts-base-mode "Ruby-TS"
   "Major mode for editing Ruby, powered by tree-sitter."
   :group 'ruby
 

@@ -6,35 +6,63 @@
 # tells you which rule is applied in the echo area.
 
 fred = 2
-dog = while fred < 12
+dog = while fred <
+            12
         puts 'hi'
         fred *= 4
         fred
       end
-       puts dog.inspect
+puts dog.inspect
+
+def frog =
+ puts("hello world")
+echo dog
+
 
 
 dog = while fred > 12 do
         fred *= 4
       end
 
-a + b *
-    c *
-    d +
-12
+with_paren = (a + b *
+                  c * d +
+              12)
+
+without_paren = a + b *
+                    c * d +
+                12
 
 call_me("today",
         "tomorrow")
+if 12 * 18 +
+   45 - 19
+  frog = 12
+  hat = 12
+elsif banana !=
+      bread
+  golf = mistake
+else
+  frog = 99
+  hat = 18
+end
 
-array = [
-  9.9,
-  10,
-  11,
-]
+if dog
+  array = [145,
+    21110,
+    11]
+end
+
+if dog
+  array = [
+    145,
+    21110,
+    11
+    ]       
+end
 
 new_hash = {
   long_ugly_name:  9,
-  frog:    12,
+  frog:           12,
   daft:           92,
   egg:            99
 }
@@ -82,7 +110,7 @@ class MyClass < HaveNoClass
     when /abcd/,
          /efgh/
       buy("twitter",
-"friday"
+          "friday"
          )
     end
 
