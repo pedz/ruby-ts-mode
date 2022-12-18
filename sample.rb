@@ -5,6 +5,18 @@
 # ‘treesit--indent-verbose’ to non-nil. Then when you indent, Emacs
 # tells you which rule is applied in the echo area.
 
+$global = 12 * $dog
+
+blah99 = ENV
+
+dog = $!
+cat = $@
+frog = $5
+
+regexp = /abc(hed|sdf)\tmore/
+%r{bl\tahblah blah}
+
+egg = :dog + frog
 fred = 2
 dog = while fred <
             12
@@ -14,10 +26,13 @@ dog = while fred <
       end
 puts dog.inspect
 
+alpha, beta, gamma = [ 1, 2, 3]
+
 def frog =
  puts("hello world")
 echo dog
 
+string = "some \a \r \n \xad\222\"string"
 
 
 dog = while fred > 12 do
@@ -31,6 +46,21 @@ with_paren = (a + b *
 without_paren = a + b *
                     c * d +
                 12
+
+'string'
+"string"
+%q{some words here}
+%{some words here}
+%Q{some words here}
+%w{some words here}
+%W{some words here}
+%i{some words here}
+%I{some words here}
+%r{some words here}
+%s{some words here}
+%x{some words here}
+:"happy dog"
+:'happy'
 
 call_me("today",
         "tomorrow")
@@ -135,3 +165,5 @@ class MyClass < HaveNoClass
 
   end
 end
+
+# and another comment

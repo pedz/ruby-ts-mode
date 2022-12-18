@@ -1,8 +1,8 @@
 ;;; ruby-ts-mode.el --- tree-sitter support for Ruby  -*- lexical-binding: t; -*-
 
-;;; This is currently a work in progress.  My intent is to release it
-;;; with whatever copyright notice Free Software Foundation,
-;;; Inc. wants.
+;; This is currently a work in progress.  My intent is to release it
+;; with whatever copyright notice Free Software Foundation,
+;; Inc. wants.
 
 ;; Author     : Perry Smith <pedz@easesoftware.com>
 ;; Created    : December 2022
@@ -22,7 +22,184 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+
+;; This file creates ruby-ts-mode which is a major mode for GNU Emacs
+;; for editting Ruby files that uses Tree Sitter to parse the
+;; language.  More information about Tree Sitter can be found in the
+;; ELisp Info pages as well as this website:
+;; https://tree-sitter.github.io/tree-sitter/
+
+;; The process to enable using ruby-ts-mode or any major mode
+;; leveraging tree sitter is currently a bit complex.  There are four
+;; pieces that needs to be accomplished.
+
+;; * Emacs needs to be compiled with tree-sitter enabled
+;;     If you compile your own Emacs, this is accomplished with adding
+;;     --with-native-compilation to the configure line.  If you are
+;;     using pre-built Emacs, then they will need to alter their build
+;;     process.  To test to see if your Emacs is enabled, execute
+;;     (treesit-available-p)
+
+;; * The tree sitter binary needs to be installed
+;;     This is platform dependent.  On macOS, brew can be used.  Other
+;;     platforms and their package managers should eventually make it
+;;     available.  There is also doing it by hand.
 ;;
+;;         git clone https://github.com/tree-sitter/tree-sitter.git
+;;         cd tree-sitter
+;;         make
+;;         make install
+
+;; * The tree sitter language specific parser needs to be installed
+;;     If you have the Emacs source, you can cd to
+;;     admin/notes/tree-sitter/build-module and execute:
+;;         ./build.sh ruby
+;;     or you can download this git repository:
+;;         git clone git@github.com:casouri/tree-sitter-module.git
+;;         cd tree-sitter-module
+;;         ./build.sh ruby
+;;     In both cases, a dist subdirectory is created and the shared
+;;     library is in that directory.  The library needs to be put
+;;     either in one of three places:
+;;       a: the standard shared library load path such as
+;;          /usr/local/lib.
+;;       b: A subdirectory in your emacs-user-directory called
+;;          tree-sitter.
+;;       c: Any place and point treesit-extra-load-path to them.
+
+;; * The appropriate major mode needs to be loaded and enabled
+;;     a: (load "/path/to/ruby-ts-mode")
+;;        M-x ruby-ts-mode
+;;     b: (require 'ruby-ts-mode)
+;;        M-x ruby-ts-mode
+;;     c: (add-to-list 'auto-mode-alist '("\\.rb\\)\\'" . ruby-ts-mode))
+;;   With the latter two assuming that this file is in your load-path.
+
+;; Tree Sitter brings a lot of power and versitility which can be
+;; broken into these features.
+
+;; * Font Lock
+
+;; The ability to color the source code is not new but what is new is
+;; the versatility to enable and disable particular font lock rules.
+;; I suggest reviewing variable treesit-font-lock-level and function
+;; treesit-font-lock-recompute-features to get a better understanding
+;; of the following.
+
+;; Currently tree treesit-font-lock-feature-list is set with the
+;; following levels:
+;;   1: comment
+;;   2: keyword, string, and type
+;;   3: assignment, constant, constant-assignment, escape-sequence,
+;;      literal, and symbol
+;;   4: bracket, error, function, operator, and variable
+
+;; Thus if treesit-font-lock-level is set to level 3 which is its
+;; default, all the features listed in levels 1 through 3 above will
+;; be enabled.  i.e. those features will font lock or colorize the
+;; code accordingly.  Individual features can be added and removed via
+;; treesit-font-lock-recompute-features.
+
+;; describe-face can be used to view how a face looks.
+
+;; Fonts defined in font-lock.el:
+;;   font-lock-bracket-face - Used for brackets: (, ), {, }, [, ].
+;;     Feature: bracket
+
+;;   font-lock-builtin-face - Used for Ruby's global variables
+;;     Feature: builtin
+
+;;   font-lock-comment-delimiter-face -- Used for the leading "#" in
+;;     comments.  Feature: comment
+
+;;   font-lock-comment-face -  Used for comments.
+;;     Feature: comment
+
+;;   font-lock-constant-face - Used for true, false, nil, self, and
+;;     super.  Feature: constant
+
+;;   font-lock-delimiter-face -- Used for quotes ("), (') as well as
+;;     percent literals: %q, %, %Q, %w, %W, %i, %I, %s, %x.
+;;     Feature: delimiter
+
+;;   font-lock-doc-face -- Used for the lvalue of an assignment.
+;;     e.g. the foo will be colored different from the blah or bar:
+;;     foo = blah + bar
+;;     This allows the user to visually see assignments in the code.
+;;     Feature: assignment
+
+;;   font-lock-doc-markup-face -- User for the declaration and
+;;     assignment of a constant.  e.g.  Foo = 12 will be colored
+;;     differently from a free standing Foo.
+;;     Feature: constant-assignment
+
+;;   font-lock-escape-face -- Used to color escape sequences within
+;;     strings.  For example in the string "Hippo\tWater", the \t
+;;     sequence will be colored differently from the rest of the
+;;     string.  Feature: escape-sequence
+;;  
+;;   font-lock-function-name-face -- Used for method names.  For
+;;     example, the foo in either def foo ... or foo(a, b, c)
+;;     Feature: function
+
+;;   font-lock-keyword-face -- Used for keywords listed in
+;;   ruby-ts-mode--keywords.  Feature: keyword
+
+;;   font-lock-misc-punctuation-face -- Used for symbols and delimted
+;;   symbols (e.g. :"foo dog").  Also, values within %i, %I, and %s
+;;   literals.  Feature: symbol
+
+;;   font-lock-negation-char-face -- Used for '!'
+;;     Keyword: operator
+
+;;   font-lock-number-face -- Used for integers, floats, complex, and
+;;     rational numbers.  The unary + and - are also font locked when
+;;     it precedes a number.  Feature: literal
+
+;;   font-lock-operator-face -- Used for operators listed in
+;;     ruby-ts-mode--operators.  Note ruby-ts-mode--operators is made
+;;     up of several other lists such as
+;;     ruby-ts-mode--operators-arithmetic so the user can easily
+;;     customize the set of operators affected.  Feature: operator
+
+;;   font-lock-preprocessor-face -- Used for global variable
+;;     references.  Feature: global
+
+;;   font-lock-property-face -- User for global variable assignments.
+;;     Feature: global-assignment
+
+;;   font-lock-punctuation-face -- User for comma and other
+;;     punctuation marks if there are any.  Feature: punctuation
+
+;;   font-lock-regexp-grouping-backslash -- Used for the contents of
+;;     regular expressions.  The parser does not pick out grouping
+;;     constructs, etc within regular expressions.  I believe, in
+;;     theory, this could be added perhaps later.  Feature: regexp
+
+;;   font-lock-regexp-grouping-construct -- User for the '/' or '%r{'
+;;     containing a regular expression.  Feature: regexp
+
+;;   font-lock-string-face -- Used for strings.
+;;     Feature: string
+
+;;   font-lock-type-face -- used for constants (i.e. identifiers
+;;   starting with upper case).  Feature: type
+
+;;   font-lock-variable-name-face -- Used for variables.
+;;     Feature variable
+
+;;   font-lock-warning-face -- Used for syntax errors according to the
+;;     tree sitter Ruby language parser.  Feature: error
+
+
+;; * Indent
+
+;; Describe ruby-ts-mode-right-justify-arrays and
+;; ruby-ts-mode-indent-split-exp-by-term.
+
+;; * IMenu
+;; * Navigation
+;; * Which-func
 
 ;;; Code:
 
@@ -97,29 +274,10 @@ without_paren = a + b *
   :type 'boolean
   :group 'ruby)
 
-(defface ruby-ts-mode--constant-assignment-face
-  '((((class grayscale) (background light)) :foreground "DimGray" :slant italic)
-    (((class grayscale) (background dark))  :foreground "LightGray" :slant italic)
-    (((class color) (min-colors 88) (background light)) :foreground "VioletRed4")
-    (((class color) (min-colors 88) (background dark))  :foreground "plum2")
-    (((class color) (min-colors 16) (background light)) :foreground "RosyBrown")
-    (((class color) (min-colors 16) (background dark))  :foreground "LightSalmon")
-    (((class color) (min-colors 8)) :foreground "green")
-    (t :slant italic))
-  "Font Lock face used in `ruby-ts-mode' to highlight assignments to constants."
-  :group 'font-lock-faces)
-
-(defface ruby-ts-mode--assignment-face
-  '((((class grayscale) (background light)) :foreground "DimGray" :slant italic)
-    (((class grayscale) (background dark))  :foreground "LightGray" :slant italic)
-    (((class color) (min-colors 88) (background light)) :foreground "VioletRed4")
-    (((class color) (min-colors 88) (background dark))  :foreground "coral1")
-    (((class color) (min-colors 16) (background light)) :foreground "RosyBrown")
-    (((class color) (min-colors 16) (background dark))  :foreground "LightSalmon")
-    (((class color) (min-colors 8)) :foreground "green")
-    (t :slant italic))
-  "Font Lock face used in `ruby-ts-mode' to hightlight assignments."
-  :group 'font-lock-faces)
+(defcustom ruby-ts-mode-include-predefined-constants t
+  "Font lock Ruby pre-defined global constants.
+When true, `ruby-ts-mode--predefined-constants' are font lock the same
+as `ruby-ts-mode--predefined'.")
 
 (defvar ruby-ts-mode--syntax-table
   (let ((table (make-syntax-table)))
@@ -205,6 +363,26 @@ without_paren = a + b *
           ruby-ts-mode--operators-dot-colon)
   "Ruby operators for tree-sitter font-locking.")
 
+(defvar ruby-ts-mode--punctuation '(",")
+  "Ruby's punctuation characters (I guess there is just one?)")
+
+(defvar ruby-ts-mode--predefined-constants
+  (rx (or "ARGF" "ARGV" "DATA" "ENV" "RUBY_COPYRIGHT"
+          "RUBY_DESCRIPTION" "RUBY_ENGINE" "RUBY_ENGINE_VERSION"
+          "RUBY_PATCHLEVEL" "RUBY_PLATFORM" "RUBY_RELEASE_DATE"
+          "RUBY_REVISION" "RUBY_VERSION" "STDERR" "STDIN" "STDOUT"
+          "TOPLEVEL_BINDING"))
+  "Ruby predefined global constants.
+These are currently unused")
+
+(defvar ruby-ts-mode--predefined
+  (rx (or "$!" "$@" "$~" "$&" "$‘" "$‘" "$+" "$=" "$/" "$\\" "$," "$;"
+          "$." "$<" "$>" "$_" "$*" "$$" "$?" "$LOAD_PATH"
+          "$LOADED_FEATURES" "$DEBUG" "$FILENAME" "$stderr" "$stdin"
+          "$stdout" "$VERBOSE" "$-a" "$-i" "$-l" "$-p"
+          (seq "$" (+ digit))))
+  "Ruby global variables (but not global constants.")
+
 ;; doc/keywords.rdoc in the Ruby git repository considers these to be
 ;; reserved keywords.  If these keywords are added to the list, it
 ;; causes the font-lock to stop working.
@@ -214,7 +392,7 @@ without_paren = a + b *
 ;; "nil" (which does not exhibit this issue) is also considered a
 ;; keyword but I removed it and added it as a constant.
 ;;
-(defun ruby-ts-mode--keywords (language)
+(defun ruby-ts-mode--keywords (_language)
   "Ruby keywords for tree-sitter font-locking.
 Currently LANGUAGE is ignored but shoule be set to `ruby'."
   (let ((common-keywords
@@ -224,6 +402,25 @@ Currently LANGUAGE is ignored but shoule be set to `ruby'."
            "retry" "return" "then" "undef" "unless" "until" "when"
            "while" "yield")))
     common-keywords))
+
+(defun ruby-ts-mode--comment-font-lock (node override start end &rest _)
+  "Applies font lock to comment NODE within START and END.
+Applies `font-lock-comment-delimiter-face' and
+`font-lock-comment-face' See `treesit-fontify-with-override' for
+values of OVERRIDE"
+  ;; Emperically it appears as if (treesit-node-start node) will be
+  ;; where the # character is at and (treesit-node-end node) will be
+  ;; the end of the line
+  ;; (message "comment-font-lock node:%S start:%S end:%s" node start end)
+  (let* ((node-start (treesit-node-start node))
+         (plus-1 (1+ node-start))
+         (node-end (treesit-node-end node))
+         (text (treesit-node-text node t)))
+    (if (and (>= node-start start)
+             (<= plus-1 end)
+             (string-match-p "\\`#" text))
+        (treesit-fontify-with-override node-start plus-1 font-lock-comment-delimiter-face override))
+    (treesit-fontify-with-override (max plus-1 start) (min node-end end) font-lock-comment-face override)))
 
 ;; Ideas of what could be added:
 ;;   1. The regular expressions start, end, and content could be font
@@ -236,8 +433,13 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
   (treesit-font-lock-rules
    :language language
    :feature 'comment
-   `((comment) @font-lock-comment-face
-     (comment) @contextual)
+   '((comment) @ruby-ts-mode--comment-font-lock)
+
+   :language language
+   :feature 'builtin
+   `(((global_variable) @var (:match ,ruby-ts-mode--predefined @var)) @font-lock-builtin-face
+     ,@(when ruby-ts-mode-include-predefined-constants
+         `(((constant) @var (:match ,ruby-ts-mode--predefined-constants @var)) @font-lock-builtin-face)))
 
    :language language
    :feature 'keyword
@@ -245,23 +447,33 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 
    :language language
    :feature 'constant
-   `((true) @font-lock-constant-face
+   '((true) @font-lock-constant-face
      (false) @font-lock-constant-face
      (nil) @font-lock-constant-face
      (self) @font-lock-constant-face
      (super)  @font-lock-constant-face)
 
-   ;; Before 'operator so (unary) works.  (I didn't want to try
-   ;; :override)
+   :language language
+   :feature 'symbol
+   '((bare_symbol) @font-lock-misc-punctuation-face
+     (delimited_symbol (string_content) @font-lock-misc-punctuation-face)
+     (hash_key_symbol) @font-lock-misc-punctuation-face
+     (simple_symbol) @font-lock-misc-punctuation-face)
+
+   ;; Before 'operator so (unary) works.
    :language language
    :feature 'literal
-   `((unary ["+" "-"] [(integer) (rational) (float) (complex)]) @font-lock-number-face
-     (simple_symbol) @font-lock-number-face
-     (delimited_symbol) @font-lock-number-face
+   '((unary ["+" "-"] [(integer) (rational) (float) (complex)]) @font-lock-number-face
      (integer) @font-lock-number-face
      (float) @font-lock-number-face
      (complex) @font-lock-number-face
      (rational) @font-lock-number-face)
+
+   ;; Also before 'operator because % and / are operators
+   :language language
+   :feature 'regexp
+   '((regex "/" @font-lock-regexp-grouping-construct)
+     (regex _ (string_content) @font-lock-regexp-grouping-backslash))
 
    :language language
    :feature 'operator
@@ -269,32 +481,48 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
      [,@ruby-ts-mode--operators] @font-lock-operator-face)
 
    :language language
+   :feature 'delimiter
+   '((delimited_symbol [ ":\"" "\"" ] @font-lock-delimiter-face)
+     (string "\"" @font-lock-delimiter-face)
+     (string_array [ "%w(" ")" ] @font-lock-delimiter-face)
+     (subshell "`" @font-lock-delimiter-face)
+     (symbol_array [ "%i(" ")"] @font-lock-delimiter-face))
+
+   :language language
    :feature 'string
-   `((string) @font-lock-string-face
-     (string_content) @font-lock-string-face)
+   '((string_content) @font-lock-string-face)
 
    :language language
    :feature 'type
-   `((constant) @font-lock-type-face)
+   '((constant) @font-lock-type-face)
+
+   :language language
+   :feature 'global-assignment
+   '((assignment
+      left: (global_variable) @font-lock-property-face))
+
+   :language language
+   :feature 'global
+   '((global_variable) @font-lock-preprocessor-face)
 
    :language language
    :feature 'assignment
    '((assignment
-      left: (identifier) @ruby-ts-mode--assignment-face)
+      left: (identifier) @font-lock-doc-face)
      (assignment
-      left: (left_assignment_list (identifier) @ruby-ts-mode--assignment-face))
+      left: (left_assignment_list (identifier) @font-lock-doc-face))
      (operator_assignment
-      left: (identifier) @ruby-ts-mode--assignment-face))
+      left: (identifier) @font-lock-doc-face))
 
    ;; Constant and scoped constant assignment (declaration)
    ;; Must be enabled explicitly
    :language language
    :feature 'constant-assignment
    :override t
-   `((assignment
-      left: (constant) @ruby-ts-mode--constant-assignment-face)
+   '((assignment
+      left: (constant) @font-lock-doc-markup-face)
      (assignment
-      left: (scope_resolution name: (constant) @ruby-ts-mode--constant-assignment-face)))
+      left: (scope_resolution name: (constant) @font-lock-doc-markup-face)))
 
    :language language
    :feature 'function
@@ -319,8 +547,10 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
    :language language
    :feature 'bracket
    '((["(" ")" "[" "]" "{" "}"]) @font-lock-bracket-face)
-   )
-  )
+
+   :language language
+   :feature 'punctuation
+   `(([,@ruby-ts-mode--punctuation] @font-lock-punctuation-face))))
 
 (defun treesit-type-pred (regexp)
   "Return predicate taking a node returning non-nil if REGEXP matches type of node."
@@ -386,19 +616,19 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((node-is ")") parent 0)
            ((node-is "end") grand-parent 0)
 
-           ,@(if ruby-ts-mode-right-justify-arrays
-                 `(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
-                    ruby-ts-mode--right-justify-array-leaf ruby-ts-mode-indent-offset)
-                   ((n-p-gp "]" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)))
+           ,@(when ruby-ts-mode-right-justify-arrays
+               '(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
+                  ruby-ts-mode--right-justify-array-leaf ruby-ts-mode-indent-offset)
+                 ((n-p-gp "]" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)))
 
            ;; method parameters with and without '('
            ((query "(method_parameters \"(\" _ @indent)") first-sibling 1)
            ((parent-is "method_parameters") first-sibling 0)
 
 
-           ,@(if ruby-ts-mode-indent-split-exp-by-term
-                 `(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
-                   ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
+           ,@(when ruby-ts-mode-indent-split-exp-by-term
+               '(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
+                 ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
 
            ((node-is "body_statement") parent ruby-ts-mode-indent-offset)
            ((parent-is "body_statement") first-sibling 0)
@@ -516,12 +746,14 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
   (setq-local which-func-functions nil)
 
   (setq-local treesit-font-lock-feature-list
-              '(( comment definition)
-                ( keyword preprocessor string type)
-                ( assignment constant escape-sequence label literal property )
-                ( bracket delimiter error function operator variable)))
-  )
+              '(( comment )
+                ( keyword regexp string type)
+                ( assignment constant constant-assignment
+                  escape-sequence global-assignment literal symbol )
+                ( bracket builtin delimiter error function global
+                  operator punctuation variable ))))
 
+;;;###autoload
 (define-derived-mode ruby-ts-mode ruby-ts-base-mode "Ruby-TS"
   "Major mode for editing Ruby, powered by tree-sitter."
   :group 'ruby
