@@ -151,3 +151,10 @@
 
 ;; (treesit-query-validate 'ruby ruby-ts-mode--operators)
 (global-set-key (kbd "H-c") #'describe-char)
+
+(defun set-treesit-font-lock-level-4 ()
+  "Sets treesit-font-lock-level to 4."
+  (setq-local treesit-font-lock-level 4)
+  (treesit-font-lock-recompute-features))
+
+(add-hook 'ruby-ts-mode-hook #'set-treesit-font-lock-level-4)
