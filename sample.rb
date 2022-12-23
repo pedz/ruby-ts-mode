@@ -4,6 +4,11 @@
 # check if your indentation is correct. To debug what went wrong, set
 # ‘treesit--indent-verbose’ to non-nil. Then when you indent, Emacs
 # tells you which rule is applied in the echo area.
+module Doggy
+  def doggy
+    @frog = banana
+  end
+end
 
 $global = 12 * $dog
 
@@ -145,24 +150,83 @@ class MyClass < HaveNoClass
     end
 
     happy = 99
-    if god != satin
-      sin += 12
-      egypt = 92
-    elsif
-      dog = 99
-    else
-      golf -= 18
-    end
-    unless bismark
-      sink += 12
-    end
-
-    i = 12
-    while i < 44
-      i += 2
-    end
     puts i
 
+  end
+end
+
+def blah
+  if false
+    dog = false
+    frog do |p, g|
+      dog = false
+      dog = false
+    end
+  elsif dog !=
+        cat
+    dog = false
+    dog = false
+    dog = false
+  else
+    dog = true
+    dog = true
+    dog = true
+  end
+
+
+  klog do |arg|
+    blah = false
+    blah = false
+    blah = false
+    blah = false
+  end
+
+  klog { |arg, arg, arg|
+    blah = false
+    blah = false
+    blah = false
+    blah = false
+  }
+
+  until frog
+    africa = black
+  end
+
+  while true do
+    dog = 12
+  dog = 12
+  dog = 12
+  dog = 12
+  dog = 12
+  end
+
+  if god != satin
+    sin += 12
+    egypt = 92
+    egypt = 92
+    egypt = 92
+    egypt = 92
+  elsif true
+    dog = 99
+    dog = 99
+    dog = 99
+    dog = 99
+  else
+    golf -= 18
+    golf -= 18
+    golf -= 18
+    golf -= 18
+  end
+
+  unless bismark
+    sink += 12
+  else
+    dog = 99
+  end
+
+  i = 12
+  while i < 44
+      i += 2
   end
 end
 
