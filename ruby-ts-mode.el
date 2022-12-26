@@ -805,8 +805,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 (defvar-keymap ruby-ts-mode-map
   :doc "Keymap used in Ruby mode"
   :parent prog-mode-map
-  "C-M-h" #'rtsn-mark-method
-  "M-<left>" #'rtsn--raw-prev-sibling
+  "C-M-h"     #'rtsn-mark-method
+  "s-<right>"  #'rtsn-forward-method
+  "M-<left>"  #'rtsn--raw-prev-sibling
   "M-<right>" #'rtsn--raw-next-sibling
   "C-c" ruby-ts-mode--arrow-keys)
 

@@ -31,6 +31,8 @@
 (defun redo ()
   (interactive)
   (load "/Users/pedz/Source/ruby-ts-mode/ruby-ts-mode.el")
+  (load "/Users/pedz/Source/ruby-ts-mode/ruby-ts-navigation.el")
+  (load "/Users/pedz/Source/ruby-ts-mode/ruby-ts-print.el")
   ;; (ruby-ts-mode)
   (setq-local treesit-simple-indent-rules (ruby-ts-mode--set-indent-style 'ruby))
   (setq-local treesit-font-lock-settings (ruby-ts-mode--font-lock-settings 'ruby))

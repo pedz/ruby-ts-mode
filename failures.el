@@ -427,3 +427,171 @@ Else
           (setq arg 0)))
       (setq end (treesit-node-end node)))
     (goto-char end)))
+
+;; Changed this to using wrapper routines...
+(defun rtsn-mark-method (&optional arg interactive)
+  "Put mark at end of this method, point at beginning.
+The method marked is the one that contains point or follows point.
+With positive ARG, mark this and that many next methods; with negative
+ARG, change the direction of marking.
+
+If the mark is active, it marks the next or previous method(s) after
+the one(s) already marked.
+
+If INTERACTIVE is non-nil, as it is interactively,
+report errors as appropriate for this kind of usage."
+  (interactive "p\nd")
+  (if interactive
+      (condition-case e
+          (rtsn-mark-method arg nil)
+        (scan-error (user-error (cadr e))))
+    (let* ((used-region-p (use-region-p))
+           (forward (and (>= arg 0) (not (eq last-command 'rtsn-mark-method-back))))
+           ;; we are repeating this command
+           (repeat (or (eq last-command 'rtsn-mark-method)
+                       (eq last-command 'rtsn-mark-method-back)))
+           (start (or (and repeat (use-region-beginning)) (point)))
+           (end (or  (and repeat (use-region-end)) (point)))
+           (regexp (regexp-opt '("class" "module")))
+           (method (treesit-node-at (if forward end start)))
+           (body-statement (treesit-node-parent method))
+           (class-module (treesit-node-parent body-statement))
+           comment first-method temp)
+      (setq arg (abs arg))
+      (unless forward
+        (setq this-command 'rtsn-mark-method-back))
+
+      ;; if class-module is nil, it means we are not within a class or
+      ;; module so we use the highest node and find its siblings.
+      ;; Otherwise, we move all three up a level until class-module is
+      ;; "class" or "module" or becomes nil.
+      (while (and class-module (not (string-match-p regexp (treesit-node-type class-module))))
+        (setq method body-statement
+              body-statement class-module
+              class-module (treesit-node-parent class-module)))
+
+      ;; if we quit with class-module set, then method a child of a
+      ;; body_statement.  Otherwise we are not within a class / module
+      ;; so we pick the highest level node.
+      (unless class-module
+        (setq method (or body-statement method)))
+      (setq first-method method)
+
+      ;; We now move forward or backward "arg" siblings but don't count
+      ;; "comment" nodes.  If mark is active, we also need to make sure
+      ;; that we don't count methods that are already within the region
+      ;; which can happen on the first hit.
+      (while (and method (> arg 0))
+        (if (and (not (string-match-p "comment" (treesit-node-type method)))
+                 (if forward
+                     (> (treesit-node-end method) end)
+                   (< (treesit-node-start method) start)))
+            (setq arg (1- arg)))
+        (if (> arg 0)
+            (setq method (if forward
+                             (treesit-node-next-sibling method)
+                           (treesit-node-prev-sibling method)))))
+
+      (when method
+        ;; move backwards over comments (to include them in the results)
+        ;;
+        ;; There are four situations.  Moving forward or backward
+        ;; multiplied by starting from point or starting from the active
+        ;; region.  In all but one case, we need to search backwards
+        ;; (always backwards) to include the comments associated with
+        ;; the method.  Thus we have:
+        ;;
+        ;; forward  used-region-p add comments
+        ;;    true            true           no
+        ;;    true           false          yes
+        ;;   false            true          yes
+        ;;   false           false          yes
+        ;;
+        (setq comment (if forward first-method method))
+        (unless (and forward use-region-p)
+          (while (and (setq temp (treesit-node-prev-sibling comment))
+                      (string-match-p "comment" (treesit-node-type temp)))
+            (setq comment temp)))
+
+        ;; SIGH!!!  Now we figure out how to set point and mark.  If
+        ;; used-region-p is false, we set point to the node start of
+        ;; comment and mark to the node end of method.  If
+        ;; used-region-p is true, we set mark to the node end of method
+        ;; if we are moving forward and point to the node start of
+        ;; comment if we are moving backwards.
+        ;; Note that setting mark changes (use-region-p) which is why
+        ;; its original value is cached up
+        (unless (and used-region-p (not forward))
+          (save-excursion
+            (goto-char (treesit-node-end method))
+            (forward-line 1)
+            (set-mark (point))))
+        (unless (and used-region-p forward)
+          (goto-char (treesit-node-start comment))
+          (forward-line 0))))))
+
+
+;; This does not use treesit-search-forward.  I'm going to write one
+;; that does and compare...
+(defun rtsn--method (point forward)
+  "Return cons ( start of method . end of method ).
+Start of method includes the comments before method as well as
+the white space from the beginning of the line.  End of method
+includes any text from the end of the method to the start of the
+next line.
+
+If POINT is within a method, that method's start and end point is
+returned.  Otherwise the next method's start and end points are
+returned when FORWARD is non-nil and the previous method's start
+and end points are returned when FORWARD is nil."
+  (let* ((class-regexp (regexp-opt '("class" "module")))
+         (method-regexp (regexp-opt '("method" "singleton_method")))
+         (method (treesit-node-at point))
+         (body-statement (treesit-node-parent method))
+         (class-module (treesit-node-parent body-statement))
+         comment temp start end)
+    
+    ;; if class-module is nil, it means we are not within a class or
+    ;; module so we use the highest node and find its siblings.
+    ;; Otherwise, we move all three up a level until class-module is
+    ;; "class" or "module" or becomes nil.
+    (while (and class-module
+                (not (string-match-p class-regexp (treesit-node-type class-module))))
+      (setq method body-statement
+            body-statement class-module
+            class-module (treesit-node-parent class-module)))
+
+    ;; if the method node spans the point and matches method-regexp we
+    ;; are done.  Otherwise, we start moving in direction specified by
+    ;; "siblings" of method for the next / prev sibling that matches
+    ;; method-regexp and is entirely before or after POINT.
+    (unless (or (not method)
+                (and (>= (treesit-node-end method) point)
+                     (<= (treesit-node-start method) point)
+                     (string-match-p method-regexp (treesit-node-type method))))
+      (if forward
+          (while (and method
+                      (not (and (> (treesit-node-start method) point)
+                                (string-match-p method-regexp (treesit-node-type method)))))
+            (setq method (treesit-node-next-sibling method)))
+        (while (and method
+                    (not (and (< (treesit-node-end method) point)
+                              (string-match-p method-regexp (treesit-node-type method)))))
+          (setq method (treesit-node-prev-sibling method)))))
+
+    ;; Now we move backwards to include any preceeding comments
+    ;; describing the method.
+    (when method
+      (setq comment method)
+      (while (and (setq temp (treesit-node-prev-sibling comment))
+                  (string-match-p "comment" (treesit-node-type temp)))
+        (setq comment temp))
+      (save-excursion
+        (goto-char (treesit-node-start comment))
+        (forward-line 0)
+        (setq start (point))
+        (goto-char (treesit-node-end method))
+        (forward-line 1)
+        (setq end (point)))
+      (cons start end))))
+

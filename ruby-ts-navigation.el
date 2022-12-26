@@ -152,6 +152,137 @@ to `point'."
     (if dest
         (goto-char (treesit-node-start dest))
       (error "Ran out of arguments / parameters"))))
+           
+;;; Start of wrapper routines, et. al.
+
+(define-error 'rtsn-scan-error
+              "A scan or movement was done that went too far"
+              'treesit-error)
+
+(defun rtsn--treesit-search-forward (start predicate &optional backward all)
+  "Call `treesit-search-forward' and signals `rtsn-scan-error' on nil return.
+See `treesit-search-forward' for description of START PREDICATE BACKWARD ALL."
+  (let ((result (treesit-search-forward start predicate backward all)))
+    (unless result
+      (signal 'rtsn-scan-error "treesit search failed"))
+    result))
+
+(defun rtsn--wrapper-wrapper (arg interactive func)
+  "A wrapper for the wrapper functions.
+See `rtsn-mark-method' as an example of how ARG and INTERACTIVE
+are interpreted.  FUNC is called with point and forward ARG times
+with point progressing appropriately on each call.  The retun is
+a list of four elements:
+
+    0th - starting point
+    1st - ending point
+    2nd - `used-region-p'
+    3rd - forward"
+  (if interactive
+      (condition-case e
+          (rtsn--wrapper-wrapper arg nil func)
+        (rtsn-scan-error
+         (message "e: %S" (cdr e))
+         (user-error (cdr e))))
+
+    ;; I'm lame... I discovered that use-region-p changes state if
+    ;; mark is set and that scared me to just caching up the original
+    ;; value and using it everywhere.
+    (let* ((used-region-p (use-region-p))
+           (back-command (intern (concat (symbol-name this-command) "-back")))
+           (forward (and (>= arg 0) (not (eq last-command back-command))))
+           (repeating (or (eq last-command this-command)
+                          (eq last-command back-command)))
+           (start (or (and repeating (use-region-beginning)) (point)))
+           (end (or  (and repeating (use-region-end)) (point)))
+           (point (if forward end start))
+           (first-pair (funcall func point forward))
+           (pair first-pair))
+
+      ;; Get repeating the same command backwards to work right.
+      (unless forward
+        (setq this-command back-command))
+
+      ;; Repeat call to func arg times moving poiint properly each time.
+      (setq arg (abs arg))
+      (while (and pair (> (setq arg (1- arg)) 0))
+        (setq point (if forward (cdr pair) (car pair))
+              pair (funcall func point forward)))
+      
+      (list (min (car first-pair) (car pair))
+            (max (cdr first-pair) (cdr pair))
+            used-region-p
+            forward))))
+
+(defun rtsn--forward-wrapper (arg interactive func)
+  "Wrapper function for moving forward.
+ARG INTERACTIVE FUNC are passed to `rtsn--wrapper-wrapper' which
+returns a list ( start end used-region-p forward ).  If forward
+is true, point is set to end else start."
+  (let* ((result (rtsn--wrapper-wrapper arg interactive func))
+         (start (nth 0 result))
+         (end (nth 1 result))
+         (forward  (nth 3 result)))
+
+    (when result
+      (goto-char (if forward end start)))))
+
+(defun rtsn--mark-wrapper (arg interactive func)
+  "Wrapper function for marking a region.
+ARG INTERACTIVE FUNC are passed to `rtsn--wrapper-wrapper' which
+returns a list ( start end used-region-p forward ).  Generally
+point is set to start and mark is set to end but not always.  e.g. if
+used-region-p is true and forward is true, only mark is set."
+  (let* ((result (rtsn--wrapper-wrapper arg interactive func))
+         (start (nth 0 result))
+         (end (nth 1 result))
+         (used-region-p (nth 2 result))
+         (forward  (nth 3 result)))
+
+    (when result
+      ;;
+      ;; Important NOTE! this routine does NOT move to the start of
+      ;; the current line or the next line.  That is the job of func
+      ;; if appropriate.
+      (unless (and used-region-p (not forward))
+        (save-excursion
+          (goto-char end)
+          (set-mark (point))))
+      (unless (and used-region-p forward)
+        (goto-char start)))))
+
+(defconst rtsn--method-regexp
+  (rx string-start (or "method" "singleton_method") string-end)
+  "Regular expression for the node type that matches a method.")
+
+(defun rtsn--method (point forward)
+  "Return cons ( start of method . end of method ).
+Start of method includes the comments before method as well as
+the white space from the beginning of the line.  End of method
+includes any text from the end of the method to the start of the
+next line.
+
+If POINT is within a method, that method's start and end point is
+returned.  Otherwise the next method's start and end points are
+returned when FORWARD is non-nil and the previous method's start
+and end points are returned when FORWARD is nil."
+  (let* ((start-node (treesit-node-at point))
+         (method (rtsn--treesit-search-forward start-node
+                                               rtsn--method-regexp
+                                               (not forward)))
+         (comment method)
+         temp start end)
+    (while (and (setq temp (treesit-node-prev-sibling comment))
+                (string-match-p "comment" (treesit-node-type temp)))
+      (setq comment temp))
+    (save-excursion
+      (goto-char (treesit-node-start comment))
+      (forward-line 0)
+      (setq start (point))
+      (goto-char (treesit-node-end method))
+      (forward-line 1)
+      (setq end (point)))
+    (cons start end)))
 
 (defun rtsn-mark-method (&optional arg interactive)
   "Put mark at end of this method, point at beginning.
@@ -165,94 +296,15 @@ the one(s) already marked.
 If INTERACTIVE is non-nil, as it is interactively,
 report errors as appropriate for this kind of usage."
   (interactive "p\nd")
-  (if interactive
-      (condition-case e
-          (rtsn-mark-method arg nil)
-        (scan-error (user-error (cadr e))))
-    (let* ((use-region-p (use-region-p))
-           (forward (and (>= arg 0) (not (eq last-command 'rtsn-mark-method-back))))
-           ;; we are repeating this command
-           (repeat (or (eq last-command 'rtsn-mark-method)
-                       (eq last-command 'rtsn-mark-method-back)))
-           (start (or (and repeat (use-region-beginning)) (point)))
-           (end (or  (and repeat (use-region-end)) (point)))
-           (regexp (regexp-opt '("class" "module")))
-           (method (treesit-node-at (if forward end start)))
-           (body-statement (treesit-node-parent method))
-           (class-module (treesit-node-parent body-statement))
-           comment first-method temp)
-      (setq arg (abs arg))
-      (unless forward
-        (setq this-command 'rtsn-mark-method-back))
+  (rtsn--mark-wrapper arg interactive #'rtsn--method))
 
-      ;; if class-module is nil, it means we are not within a class or
-      ;; module so we use the highest node and find its siblings.
-      ;; Otherwise, we move all three up a level until class-module is
-      ;; "class" or "module" or becomes nil.
-      (while (and class-module (not (string-match-p regexp (treesit-node-type class-module))))
-        (setq method body-statement
-              body-statement class-module
-              class-module (treesit-node-parent class-module)))
-
-      ;; if we quit with class-module set, then method a child of a
-      ;; body_statement.  Otherwise we are not within a class / module
-      ;; so we pick the highest level node.
-      (unless class-module
-        (setq method (or body-statement method)))
-      (setq first-method method)
-
-      ;; We now move forward or backward "arg" siblings but don't count
-      ;; "comment" nodes.  If mark is active, we also need to make sure
-      ;; that we don't count methods that are already within the region
-      ;; which can happen on the first hit.
-      (while (and method (> arg 0))
-        (if (and (not (string-match-p "comment" (treesit-node-type method)))
-                 (if forward
-                     (> (treesit-node-end method) end)
-                   (< (treesit-node-start method) start)))
-            (setq arg (1- arg)))
-        (if (> arg 0)
-            (setq method (if forward
-                             (treesit-node-next-sibling method)
-                           (treesit-node-prev-sibling method)))))
-
-      (when method
-        ;; move backwards over comments (to include them in the results)
-        ;;
-        ;; There are four situations.  Moving forward or backward
-        ;; multiplied by starting from point or starting from the active
-        ;; region.  In all but one case, we need to search backwards
-        ;; (always backwards) to include the comments associated with
-        ;; the method.  Thus we have:
-        ;;
-        ;; forward  use-region-p add comments
-        ;;    true            true           no
-        ;;    true           false          yes
-        ;;   false            true          yes
-        ;;   false           false          yes
-        ;;
-        (setq comment (if forward first-method method))
-        (unless (and forward use-region-p)
-          (while (and (setq temp (treesit-node-prev-sibling comment))
-                      (string-match-p "comment" (treesit-node-type temp)))
-            (setq comment temp)))
-
-        ;; SIGH!!!  Now we figure out how to set point and mark.  If
-        ;; use-region-p is false, we set point to the node start of
-        ;; comment and mark to the node end of method.  If
-        ;; use-region-p is true, we set mark to the node end of method
-        ;; if we are moving forward and point to the node start of
-        ;; comment if we are moving backwards.
-        ;; Note that setting mark changes (use-region-p) which is why
-        ;; its original value is cached up
-        (unless (and use-region-p (not forward))
-          (save-excursion
-            (goto-char (treesit-node-end method))
-            (forward-line 1)
-            (set-mark (point))))
-        (unless (and use-region-p forward)
-          (goto-char (treesit-node-start comment))
-          (forward-line 0))))))
+(defun rtsn-forward-method (&optional arg interactive)
+  "Move point forward ARG methods.
+Negative ARG moves backwards.
+If INTERACTIVE is non-nil, as it is interactively,
+report errors as appropriate for this kind of usage."
+  (interactive "p\nd")
+  (rtsn--forward-wrapper arg interactive #'rtsn--method))
 
 (provide 'ruby-ts-navigation)
 
