@@ -10,6 +10,14 @@ module Doggy
   end
 end
 
+    begin
+      if true
+        dog = 12
+      end
+    end
+
+
+
 $global = 12 * $dog
 
 blah99 = ENV
@@ -30,6 +38,27 @@ dog = while fred <
         fred
       end
 puts dog.inspect
+
+foo.bar do |z|
+  dog = 12  
+end
+
+some_variable = 4 +
+                some_array.
+                  duck.
+                  reduce do |acc, x|
+                    acc + x
+                  end
+
+foo.
+  bar.
+  dog.
+  house do |z|
+  dog = 12
+  cat = 44
+end
+
+"This is a #{golf}" 
 
 alpha, beta, gamma = [ 1, 2, 3]
 

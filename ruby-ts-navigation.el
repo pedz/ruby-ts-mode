@@ -155,9 +155,40 @@ to `point'."
            
 ;;; Start of wrapper routines, et. al.
 
+
 (define-error 'rtsn-scan-error
               "A scan or movement was done that went too far"
               'treesit-error)
+
+(defun rtsn--desired-item-p (node point forward)
+  "Return non-nil if the NODE is the desired item.
+The primitive routines take POINT and FORWARD as arguments.
+POINT is where to start the search and FORWARD is non-nil if the
+search direction is forward.  They all return a cons cell with
+CAR set to the start of the item and CDR set to the end of the
+item.
+
+As described in the Point node in Info, point is between
+characters.  Thus, if the item's start is less than POINT and the
+item's end is greater than POINT, then the item contains POINT.
+
+However if the start of the item is equal to POINT, then the item
+actually starts after POINT.  If FORWARD is true, then this is the
+desired item because moving forward, the item that was found will
+be the next item.  But if FORWARD is nil indicating that the
+movement is backwards, the item found is not the desired item since
+moving backwards will select a different, previous item.
+
+The converse is also true.  If the item's end is equal to POINT,
+then the item is actually before POINT.  This is the desired item
+if FORWARD is nil and movement is backwards but it is not the
+desired item if movement is forward."
+  (let ((start (treesit-node-start node))
+        (end (treesit-node-end node)))
+    (or (and (< start point) (> end point))
+        (if forward
+            (>= start point)
+          (<= end point)))))
 
 (defun rtsn--treesit-search-forward (start predicate &optional backward all)
   "Call `treesit-search-forward' and signals `rtsn-scan-error' on nil return.
@@ -257,15 +288,13 @@ used-region-p is true and forward is true, only mark is set."
 
 (defun rtsn--method (point forward)
   "Return cons ( start of method . end of method ).
+Starting at POINT and moving forward if FORWARD, else backwards, the
+next or previous method is found.
+
 Start of method includes the comments before method as well as
 the white space from the beginning of the line.  End of method
 includes any text from the end of the method to the start of the
-next line.
-
-If POINT is within a method, that method's start and end point is
-returned.  Otherwise the next method's start and end points are
-returned when FORWARD is non-nil and the previous method's start
-and end points are returned when FORWARD is nil."
+next line."
   (let* ((start-node (treesit-node-at point))
          (method (rtsn--treesit-search-forward start-node
                                                rtsn--method-regexp
@@ -284,6 +313,91 @@ and end points are returned when FORWARD is nil."
       (setq end (point)))
     (cons start end)))
 
+(defconst rtsn--statement-parent-regexp
+  (rx string-start
+      (or "program"
+          "block_body"
+          "begin_block"
+          "end_block"
+          "do"
+          "else"
+          "then"
+          "ensure"
+          "body_statement"
+          "parenthesized_statements"
+          "interpolation")
+      string-end)
+  "Regular expression of the nodes that can constain statements.")
+
+(defun rtsn--is-comment (node)
+  "Return t if NODE type is comment."
+  (string-match-p "comment" (treesit-node-type node)))
+
+(defun rtsn--lineno (node)
+  "Return line number of NODE's start."
+  (line-number-at-pos (treesit-node-start node)))
+
+(defun rtsn--statement (point forward)
+  "Return cons ( start of statement . end of statement ).
+Starting at POINT and moving forward if FORWARD, else backwards, the
+next or previous statement is found.
+
+If the statement starts the line, then it includes any comment lines
+before the statement.  If there is only write space and comment from
+the end of the statement to the end of the line then the end of
+statement includes up to and including the new line."
+  ;; treesit-search-forward can not be used because "statement" in the
+  ;; grammer is actually "_statement" which means it is hidden.
+  ;; Another problem is "_statement" includes "_expression" but
+  ;; obviously a statement can be an expression but an expression
+  ;; isn't always a statement.
+  ;;
+  ;; So the node at point is found.  Then the parents are found until
+  ;; a node that can contain statements is found.  This node's type
+  ;; will match rtsn--statement-parent-regexp.  The immediate child of
+  ;; this node will be the statement.
+  (let* ((statement (treesit-node-at point))
+         (parent (treesit-node-parent statement)))
+         ;; start sibling lineno temp)
+    (message "point: %S; forward: %S" point forward)
+    (message "1 parent: %S; statement: %S" parent statement)
+    (while (and parent
+                statement
+                (not (string-match-p rtsn--statement-parent-regexp
+                                     (treesit-node-type parent))))
+      (setq statement parent
+            parent (treesit-node-parent parent))
+      (message "2 parent: %S; statement: %S" parent statement))
+      
+
+    ;; Move in proper direction over comments.
+    (while (and statement
+                (or (rtsn--is-comment statement)
+                    (not (rtsn--desired-item-p statement point forward))))
+      (setq statement (if forward
+                          (treesit-node-next-sibling statement)
+                        (treesit-node-prev-sibling statement)))
+      (message "3 parent: %S; statement: %S" parent statement))
+
+
+    ;; Error off if we are off in space.
+    (unless statement
+      (signal 'rtsn-scan-error "statement not found"))
+    (cons (treesit-node-start statement) (treesit-node-end statement))))
+
+    ;; (setq lineno (rtsn--lineno statement)
+    ;;       sibling (treesit-node-prev-sibling statement))
+    ;; (if (rtsn--is-comment sibling)
+    ;;     (progn
+    ;;       (while (and (setq temp (treesit-node-prev-sibling sibling))
+    ;;                   (rtsn--is-comment temp))
+    ;;         (setq sibling temp))
+    ;;       (setq start (treesit-node-start sibling)))
+    ;;   ;;;;  start here tomorrow...
+    ;;   (if (= lineno (rtsn--lineno sibling))
+    ;;       (setq)))))
+
+    
 (defun rtsn-mark-method (&optional arg interactive)
   "Put mark at end of this method, point at beginning.
 The method marked is the one that contains point or follows point.
@@ -297,6 +411,20 @@ If INTERACTIVE is non-nil, as it is interactively,
 report errors as appropriate for this kind of usage."
   (interactive "p\nd")
   (rtsn--mark-wrapper arg interactive #'rtsn--method))
+
+(defun rtsn-mark-statement (&optional arg interactive)
+  "Put mark at end of this statement, point at beginning.
+The statement marked is the one that contains point or follows point.
+With positive ARG, mark this and that many next statements; with negative
+ARG, change the direction of marking.
+
+If the mark is active, it marks the next or previous statement(s) after
+the one(s) already marked.
+
+If INTERACTIVE is non-nil, as it is interactively,
+report errors as appropriate for this kind of usage."
+  (interactive "p\nd")
+  (rtsn--mark-wrapper arg interactive #'rtsn--statement))
 
 (defun rtsn-forward-method (&optional arg interactive)
   "Move point forward ARG methods.

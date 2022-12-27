@@ -281,6 +281,42 @@ as `ruby-ts-mode--predefined'."
   :type 'boolean
   :group 'ruby)
 
+(defcustom ruby-ts-mode-call-block t
+  "When non-nil:
+
+some_variable = 4 +
+  some_array.
+    duck.
+    reduce do |acc, x|
+    acc + x
+  end
+
+foo
+  .bar
+  .dog
+  .house do |z|
+  dog = 12
+  cat = 44
+end
+
+verses when nil:
+
+
+some_variable = 4 +
+  some_array.
+    duck.
+    reduce do |acc, x|
+      acc + x
+    end
+
+foo
+  .bar
+  .dog
+  .house do |z|
+    dog = 12
+    cat = 44
+  end")
+
 (defvar ruby-ts-mode--syntax-table
   (let ((table (make-syntax-table)))
     ;; Mostly stolen from ruby-mode but enh-ruby-mode also added ??
@@ -646,18 +682,29 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; but with node set to the statement and parent set to
            ;; body_statement for all others. ... Fine.  Be that way.
            ;; Ditto for "block" and "block_body"
+
+           ,@(when ruby-ts-mode-call-block
+               '(((n-p-gp "end" "do_block" "call") (bol (grand-parent-node)) 0)
+                 ((n-p-gp nil "do_block" "call") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+                 ((parent-is "body_statement") first-sibling 0)))
+
            ((node-is "body_statement") parent-bol ruby-ts-mode-indent-offset)
            ((parent-is "body_statement") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+           ((match "end" "do_block") parent-bol 0)
+
            ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
            ((n-p-gp nil "block_body" "block") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
            ((match "}" "block") (bol (grand-parent-node)) 0)
+           ((match "." "call") parent ruby-ts-mode-indent-offset)
 
            ;; "while" and "until" have a "do" child that have
            ;; statements as their children.
+           ((n-p-gp "end" "do" "while") grand-parent 0)
            ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
            
            ((node-is ")") parent 0)
-           ((node-is "end") grand-parent 0)
+           ((node-is "end") parent 0)
+           ((parent-is "begin") parent ruby-ts-mode-indent-offset)
 
            ,@(when ruby-ts-mode-right-justify-arrays
                '(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
@@ -806,6 +853,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
   :doc "Keymap used in Ruby mode"
   :parent prog-mode-map
   "C-M-h"     #'rtsn-mark-method
+  "H-<right>"  #'rtsn-mark-statement
   "s-<right>"  #'rtsn-forward-method
   "M-<left>"  #'rtsn--raw-prev-sibling
   "M-<right>" #'rtsn--raw-next-sibling
