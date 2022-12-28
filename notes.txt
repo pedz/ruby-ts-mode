@@ -1,0 +1,93 @@
+These are the predefined faces in font-lock.el.  The R in front are
+the ones that ruby-mode uses.  The text after the -- is what ruby-mode
+uses them for.
+
+The indented one inherit from the ones above
+(e.g. font-lock-doc-markup-face inherits from
+font-lock-constant-face).  "error" and "bold" are faces.
+
+This group ruby-mode and ruby-ts-mode use the same way.
+
+R font-lock-type-face -- used forCONSTANTS 
+R font-lock-constant-face -- used for symbols
+    font-lock-doc-markup-face
+R font-lock-string-face -- used for strings
+    font-lock-doc-face
+R font-lock-variable-name-face -- used for $globals and @instances
+    font-lock-property-face
+R font-lock-keyword-face -- used for keywords like def
+R font-lock-function-name-face -- the identifier after "def"
+R font-lock-negation-char-face (nil) -- used for !
+
+This group the two modes differ
+
+  font-lock-comment-face not used?
+    font-lock-comment-delimiter-face
+R font-lock-builtin-face -- various keywords, etc. such as "puts".
+R   font-lock-preprocessor-face -- the options for a regexp, the i in
+      /foo/i (except it seems broken but that's another matter).
+  error
+    font-lock-warning-face
+  bold
+    font-lock-regexp-grouping-backslash
+      font-lock-escape-face
+    font-lock-regexp-grouping-construct
+  font-lock-number-face (nil)
+  font-lock-operator-face (nil)
+  font-lock-punctuation-face (nil)
+    font-lock-bracket-face
+    font-lock-delimiter-face
+    font-lock-misc-punctuation-face -- not used now
+font-lock-preprocessor-face -- not used now
+
+Features in ruby-ts-mode that are currently commented out:
+
+var
+var assign
+const assign
+
+Changes:
+
+1) Strings still use font-lock-string-face but the #{ and } for
+interpolation use font-lock-doc-face which is inherited from
+font-lock-string-face so it will look the same but can be tweaked to
+look different if desired.
+
+2) ruby-mode uses font-lock-constant-face so I changed and do the
+same.  In addition, true, false, etc are now marked up with
+font-lock-doc-markup-face which is inherited from
+font-lock-constant-face.
+
+3) ruby-mode uses font-lock-variable-name-face for $globals and
+@instance variables so I now do the same.  BUT, if a $global or
+@instance is used on the left hand side (assignment),
+font-lock-property-face is used.  Again, font-lock-property-face is
+inherited from font-lock-variable-name-face so by default, it will
+look the same but can be easily tweaked so assignments to globals and
+instance variables differ.
+
+No Changes:
+
+1) ruby-mode uses font-lock-preprocessor-face for the options after a
+regular expression.  e.g. the i in /foo/i will be marked with
+font-lock-preprocessor-face.  I didn't do this.  Currently I have
+font-lock-regexp-grouping-construct is the / and
+font-lock-regexp-grouping-backslash as the contents of the regexp.
+The options at the end are scanned as part of the / so they will be
+marked with font-lock-regexp-grouping-construct.  But default, these
+inherit from bold.
+
+2) ruby-mode uses font-lock-builtin-face for three or four lists of
+symbols which I didn't spend the time to find what they were.  They
+seemed a bit arbitrary to me.  I use font-lock-builtin-face for Ruby's
+global predefined variables and optionally also for Ruby's global
+predefined constants (as defined here:
+https://docs.ruby-lang.org/en/3.1/globals_rdoc.html)
+
+3) We both use font-lock-keyword-face for keywords and the list seems
+(at least roughly) the same.
+
+4) We both use font-lock-function-name-face the same -- the name after
+"def".
+
+5) We both use font-lock-negation-char-face for !

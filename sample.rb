@@ -16,7 +16,7 @@ end
       end
     end
 
-
+j = /abcd/ixg
 
 $global = 12 * $dog
 
@@ -57,6 +57,9 @@ foo.
   dog = 12
   cat = 44
 end
+
+@dog = 12;
+
 
 "This is a #{golf}" 
 

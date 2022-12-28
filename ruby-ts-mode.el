@@ -89,10 +89,11 @@
 ;; Currently tree treesit-font-lock-feature-list is set with the
 ;; following levels:
 ;;   1: comment
-;;   2: keyword, string, and type
-;;   3: assignment, constant, constant-assignment, escape-sequence,
-;;      literal, and symbol
-;;   4: bracket, error, function, operator, and variable
+;;   2: keyword regexp string type
+;;   3: builtin constant constant-assignment delimiter escape-sequence
+;;      function global global-assignment instance instance-assignment
+;;      interpolation literal symbol variable variable-assignment
+;;   4: bracket error operator punctuation
 
 ;; Thus if treesit-font-lock-level is set to level 3 which is its
 ;; default, all the features listed in levels 1 through 3 above will
@@ -103,10 +104,21 @@
 ;; describe-face can be used to view how a face looks.
 
 ;; Fonts defined in font-lock.el:
+;;   font-lock-punctuation-face -- User for comma and other
+;;     punctuation marks if there are any.  Feature: punctuation
+
 ;;   font-lock-bracket-face - Used for brackets: (, ), {, }, [, ].
 ;;     Feature: bracket
 
-;;   font-lock-builtin-face - Used for Ruby's global variables
+;;   font-lock-delimiter-face -- Used for quotes ("), (') as well as
+;;     percent literals: %q, %, %Q, %w, %W, %i, %I, %s, %x.
+;;     Feature: delimiter
+
+;;   font-lock-constant-face -- Used for symbols and delimted
+;;   symbols (e.g. :"foo dog").  Also, values within %i, %I, and %s
+;;   literals.  Feature: symbol
+
+;;   font-lock-builtin-face - Used for Ruby's global variables.
 ;;     Feature: builtin
 
 ;;   font-lock-comment-delimiter-face -- Used for the leading "#" in
@@ -118,17 +130,13 @@
 ;;   font-lock-constant-face - Used for true, false, nil, self, and
 ;;     super.  Feature: constant
 
-;;   font-lock-delimiter-face -- Used for quotes ("), (') as well as
-;;     percent literals: %q, %, %Q, %w, %W, %i, %I, %s, %x.
-;;     Feature: delimiter
-
-;;   font-lock-doc-face -- Used for the lvalue of an assignment.
+;;   tbd-lvalue -- Used for the lvalue of an assignment.
 ;;     e.g. the foo will be colored different from the blah or bar:
 ;;     foo = blah + bar
 ;;     This allows the user to visually see assignments in the code.
-;;     Feature: assignment
+;;     Feature: variable-assignment
 
-;;   font-lock-doc-markup-face -- User for the declaration and
+;;   tbd-constant-assignment-face -- User for the declaration and
 ;;     assignment of a constant.  e.g.  Foo = 12 will be colored
 ;;     differently from a free standing Foo.
 ;;     Feature: constant-assignment
@@ -145,10 +153,6 @@
 ;;   font-lock-keyword-face -- Used for keywords listed in
 ;;   ruby-ts-mode--keywords.  Feature: keyword
 
-;;   font-lock-misc-punctuation-face -- Used for symbols and delimted
-;;   symbols (e.g. :"foo dog").  Also, values within %i, %I, and %s
-;;   literals.  Feature: symbol
-
 ;;   font-lock-negation-char-face -- Used for '!'
 ;;     Keyword: operator
 
@@ -162,14 +166,11 @@
 ;;     ruby-ts-mode--operators-arithmetic so the user can easily
 ;;     customize the set of operators affected.  Feature: operator
 
-;;   font-lock-preprocessor-face -- Used for global variable
-;;     references.  Feature: global
+;;   font-lock-variable-name-face -- Used for global variable and
+;;     instance variable references.  Feature: global
 
-;;   font-lock-property-face -- User for global variable assignments.
-;;     Feature: global-assignment
-
-;;   font-lock-punctuation-face -- User for comma and other
-;;     punctuation marks if there are any.  Feature: punctuation
+;;   font-lock-property-face -- User for global variable and instance
+;;     variable assignments.  Feature: global-assignment
 
 ;;   font-lock-regexp-grouping-backslash -- Used for the contents of
 ;;     regular expressions.  The parser does not pick out grouping
@@ -182,11 +183,14 @@
 ;;   font-lock-string-face -- Used for strings.
 ;;     Feature: string
 
+;;   font-lock-doc-face -- Used for string interpolation delimiters #{
+;;   and }.  Feature: interpolation
+
 ;;   font-lock-type-face -- used for constants (i.e. identifiers
 ;;   starting with upper case).  Feature: type
 
-;;   font-lock-variable-name-face -- Used for variables.
-;;     Feature variable
+;;   tbd-variable-face -- Used for variables.
+;;     Feature: variable
 
 ;;   font-lock-warning-face -- Used for syntax errors according to the
 ;;     tree sitter Ruby language parser.  Feature: error
@@ -485,18 +489,26 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 
    :language language
    :feature 'constant
-   '((true) @font-lock-constant-face
-     (false) @font-lock-constant-face
-     (nil) @font-lock-constant-face
-     (self) @font-lock-constant-face
-     (super)  @font-lock-constant-face)
+   '((true) @font-lock-doc-markup-face
+     (false) @font-lock-doc-markup-face
+     (nil) @font-lock-doc-markup-face
+     (self) @font-lock-doc-markup-face
+     (super)  @font-lock-doc-markup-face)
+
+   ;; :language language
+   ;; :feature 'constant-assignment
+   ;; :override t
+   ;; '((assignment
+   ;;    left: (constant) @tbd-constant-assignment-face)
+   ;;   (assignment
+   ;;    left: (scope_resolution name: (constant) @tbd-constant-assignment-face)))
 
    :language language
    :feature 'symbol
-   '((bare_symbol) @font-lock-misc-punctuation-face
-     (delimited_symbol (string_content) @font-lock-misc-punctuation-face)
-     (hash_key_symbol) @font-lock-misc-punctuation-face
-     (simple_symbol) @font-lock-misc-punctuation-face)
+   '((bare_symbol) @font-lock-constant-face
+     (delimited_symbol (string_content) @font-lock-constant-face)
+     (hash_key_symbol) @font-lock-constant-face
+     (simple_symbol) @font-lock-constant-face)
 
    ;; Before 'operator so (unary) works.
    :language language
@@ -531,6 +543,11 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
    '((string_content) @font-lock-string-face)
 
    :language language
+   :feature 'interpolation
+   '((interpolation "#{" @font-lock-doc-face)
+     (interpolation "}" @font-lock-doc-face))
+
+   :language language
    :feature 'type
    '((constant) @font-lock-type-face)
 
@@ -541,26 +558,16 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 
    :language language
    :feature 'global
-   '((global_variable) @font-lock-preprocessor-face)
+   '((global_variable) @font-lock-variable-name-face)
 
    :language language
-   :feature 'assignment
+   :feature 'instance-assignment
    '((assignment
-      left: (identifier) @font-lock-doc-face)
-     (assignment
-      left: (left_assignment_list (identifier) @font-lock-doc-face))
-     (operator_assignment
-      left: (identifier) @font-lock-doc-face))
+      left: (instance_variable) @font-lock-property-face))
 
-   ;; Constant and scoped constant assignment (declaration)
-   ;; Must be enabled explicitly
    :language language
-   :feature 'constant-assignment
-   :override t
-   '((assignment
-      left: (constant) @font-lock-doc-markup-face)
-     (assignment
-      left: (scope_resolution name: (constant) @font-lock-doc-markup-face)))
+   :feature 'instance
+   '((instance_variable) @font-lock-variable-name-face)
 
    :language language
    :feature 'function
@@ -569,9 +576,18 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
      (method
       name: (identifier) @font-lock-function-name-face))
 
-   :language language
-   :feature 'variable
-   '((identifier) @font-lock-variable-name-face)
+   ;; :language language
+   ;; :feature 'variable
+   ;; '((identifier) @tbd-variable-face)
+
+   ;; :language language
+   ;; :feature 'variable-assignment
+   ;; '((assignment
+   ;;    left: (identifier) @tbd-lvalue)
+   ;;   (assignment
+   ;;    left: (left_assignment_list (identifier) @tbd-lvalue))
+   ;;   (operator_assignment
+   ;;    left: (identifier) @tbd-lvalue))
 
    :language language
    :feature 'error
@@ -878,13 +894,16 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
   ;; works.
   (setq-local which-func-functions nil)
 
+  ;; FIXME -- make this a customizable variable so the user can
+  ;; configure his own levels easily.
   (setq-local treesit-font-lock-feature-list
               '(( comment )
                 ( keyword regexp string type)
-                ( assignment constant constant-assignment
-                  escape-sequence global-assignment literal symbol )
-                ( bracket builtin delimiter error function global
-                  operator punctuation variable ))))
+                ( builtin constant constant-assignment
+                  delimiter escape-sequence function global
+                  global-assignment instance instance-assignment
+                  interpolation literal symbol variable variable-assignment )
+                ( bracket error operator punctuation ))))
 
 ;;;###autoload
 (define-derived-mode ruby-ts-mode ruby-ts-base-mode "Ruby"
