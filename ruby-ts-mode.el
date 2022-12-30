@@ -628,6 +628,27 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
   (lambda (_n parent &rest _)
     parent))
 
+(declare-function ruby-smie--indent-to-stmt-p "ruby-mode.el" (keyword))
+
+(defun option-ruby-alignable-keywords (pred)
+  "Return either start or bol of PRED.
+PRED should specify a node that is listed in
+`ruby-alignable-keywords'.  If PRED is listed in user option
+`ruby-align-to-stmt-keywords', then return the BOL of PRED.
+Otherwise return start of PRED."
+  (lambda (node parent bol &rest rest)
+    (let* ((pred-node (funcall pred node parent bol rest))
+           (temp (treesit-node-start pred-node))
+           (keyword (treesit-node-type pred-node))
+           (bol (ruby-smie--indent-to-stmt-p keyword)))
+      (when temp
+        (if bol
+            (save-excursion
+              (goto-char temp)
+              (back-to-indentation)
+              (point))
+          temp)))))
+
 (defun bol (pred)
   "Return bol of PRED.
 PRED should take (node parent bol &rest rest) and return a node.
@@ -729,12 +750,17 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; but with node set to the statement and parent set to
            ;; body_statement for all others. ... Fine.  Be that way.
            ;; Ditto for "block" and "block_body"
-
+           ;;
+           ;; FIXME: What follows are two sets of three queries.  The
+           ;; first trigger when the option is enabled and the second
+           ;; trigger when the option is disabled.  The problem is
+           ;; that this is not dynamic.  I plan to rewrite these so
+           ;; that the value of the option is retrieved at the time
+           ;; the line is indented like I'm doing elsewhere.
            ,@(when ruby-ts-mode-call-block
                '(((n-p-gp "end" "do_block" "call") (bol (grand-parent-node)) 0)
                  ((n-p-gp nil "do_block" "call") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
                  ((parent-is "body_statement") first-sibling 0)))
-
            ((node-is "body_statement") parent-bol ruby-ts-mode-indent-offset)
            ((parent-is "body_statement") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
            ((match "end" "do_block") parent-bol 0)
@@ -742,6 +768,54 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
            ((n-p-gp nil "block_body" "block") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
            ((match "}" "block") (bol (grand-parent-node)) 0)
+
+           ;; if then else elseif notes:
+           ;;
+           ;;   1. The "then" starts at the end of the line that ends
+           ;;      the if condition which can be on a different line
+           ;;      from the "if".
+           ;;
+           ;;   2. If there is an "elsif", it is a sibling to the then
+           ;;      BUT the "else" that follows is now a child of the
+           ;;      "elsif".
+           ;;
+           ;;   3. The statements within each of these are direct
+           ;;      children.  There is no intermediate construct such
+           ;;      as a block_statement.
+           ;;
+           ;; I'm using very restrictive patterns hoping to reduce rules
+           ;;triggering unintentionally.
+           ((match "else" "if")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((match "elsif" "if")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((match "end" "if")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((n-p-gp nil "then\\|else\\|elsif" "if\\|unless")
+            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+
+           ;; case expression can have "case" "when" "in" (called
+           ;; in_clause) "else" and "end".  "case" can be in
+           ;; ruby-align-to-stmt-keywords.  "when", etc are children
+           ;; of "case".  The statements under when is part of a
+           ;; "then" that is the child of "when".
+
+           ;; case expression: when, in_clause, and else are all
+           ;; children of case.  when and in_clause have pattern and
+           ;; body as fields.  body has "then" and then the statemets.
+           ;; i.e. the statements are not children of when but then.
+           ;; But for the statements are children of else.
+           ((match "when" "case")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((match "in_clause" "case")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((match "else" "case")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((match "end" "case")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((n-p-gp nil "then" "when") grand-parent ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "then" "in_clause") grand-parent ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
 
            ;; ((do-ruby-align-chained-calls) parent ruby-ts-mode-indent-offset)
            ((match "\\." "call") (ruby-ts-mode--align-call) 0)
@@ -752,9 +826,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
            
            ((node-is ")") parent 0)
-           ;; What I had before
+           ;; What I had before -- remove both for now.
            ;; ((node-is "end") parent 0)
-           ((node-is "end") parent-bol 0)
+           ;; ((node-is "end") parent-bol 0)
            ((parent-is "begin") parent ruby-ts-mode-indent-offset)
 
            ,@(when ruby-ts-mode-right-justify-arrays
@@ -779,28 +853,10 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((parent-is "binary") first-sibling 0)
 
            ;; "when" list spread across multiple lines
-           ((n-p-gp "pattern" "when" "case") (nth-sibling 1) 0)
-           ((n-p-gp nil "then" "when") grand-parent ruby-ts-mode-indent-offset)
-           ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
-
-           ;; if then else elseif notes:
-           ;;
-           ;;   1. The "then" starts at the end of the line that ends
-           ;;      the if condition which can be on a different line
-           ;;      from the "if".
-           ;;
-           ;;   2. If there is an "elsif", it is a sibling to the then
-           ;;      BUT the "else" that follows is now a child of the
-           ;;      "elsif".
-           ;;
-           ;;   3. The statements within each of these are direct
-           ;;      children.  There is no intermediate construct such
-           ;;      as a block_statement.
-           ((node-is "else")  parent-bol 0)
-           ((node-is "elsif") parent-bol 0)
-           ((n-p-gp nil "then\\|else\\|elsif" "if\\|unless") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
-
-           ((node-is "when")  parent-bol 0)
+           ;; old code...
+           ;; ((n-p-gp "pattern" "when" "case") (nth-sibling 1) 0)
+           ;; ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
+           ;; ((node-is "when")  parent-bol 0)
 
            ;; Assignment of hash and array
            ((n-p-gp "}" "hash" "assignment") grand-parent 0)
