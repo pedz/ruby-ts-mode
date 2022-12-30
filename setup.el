@@ -1,6 +1,8 @@
 
-
 (add-to-list 'load-path (file-name-directory load-file-name))
+
+(require 'ruby-mode)
+(require 'ruby-ts-mode)
 
 (define-key ruby-mode-map (kbd "s-<right>") #'forward-sexp)
 (define-key ruby-mode-map (kbd "s-<left>") #'backward-sexp)

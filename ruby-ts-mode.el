@@ -195,7 +195,6 @@
 ;;   font-lock-warning-face -- Used for syntax errors according to the
 ;;     tree sitter Ruby language parser.  Feature: error
 
-
 ;; * Indent
 
 ;; Describe ruby-ts-mode-right-justify-arrays and
@@ -429,6 +428,18 @@ These are currently unused")
           "$stdout" "$VERBOSE" "$-a" "$-i" "$-l" "$-p"
           (seq "$" (+ digit))))
   "Ruby global variables (but not global constants.")
+
+(defconst ruby-ts-mode--class-or-module-regex
+  (rx string-start
+      (or "class" "module" "singleton_class")
+      string-end)
+  "Regular expression that matches a class or module's node type.")
+
+(defconst ruby-ts-mode--method-regex
+  (rx string-start
+      (or "method" "singleton_method")
+      string-end)
+  "Regular expression matching methods and singleton methods.")
 
 (defun rtsn--lineno (node)
   "Return line number of NODE's start."
@@ -711,6 +722,24 @@ See `ruby-align-chained-calls' for details."
          (equal "." (treesit-node-type node))
          (equal "call" (treesit-node-type parent)))))
 
+(defun ruby-ts-mode--method-params-indent ()
+  "Align method parameters as specified by `ruby-method-params-indent'."
+  (lambda (node parent &rest _)
+    "PARENT will be method_paramters"
+    (let* ((method (treesit-node-parent parent))
+           (from-name (eq t ruby-method-params-indent)))
+      (if from-name
+          ;; For methods, the "name" is the name of the method but for
+          ;; singleton methods, we need to find "object"
+          (let* ((singleton (equal "singleton_method" (treesit-node-type method)))
+                 (name-node (treesit-node-child-by-field-name
+                             method
+                             (if singleton "object" "name"))))
+            (message "singleton: %S method: %S" singleton method)
+            (treesit-node-start name-node))
+        (+ (treesit-node-start method)
+           (or ruby-method-params-indent 0))))))
+
 (defalias 'ancestor-node #'ancestor-is
   "Return ancestor node whose type matches regexp TYPE.")
 
@@ -738,6 +767,8 @@ See `ruby-align-chained-calls' for details."
                          (+ grand-parent-bol max-length 1))))
 
     (- align-column node-length)))
+
+
            ;; REMOVED FROM ruby-ts-mode--indent-styles
            ;;
            ;; a "do_block" has a "body_statement" child which has the
@@ -894,14 +925,14 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; well as statements.  Note that the first statement of a
            ;; body_statement hits the node as "body_statement" and not
            ;; as the assignment, etc.
-           ((match "end" ,treesit-defun-type-regexp)
+           ((match "end" ,ruby-ts-mode--method-regex)
             (option-ruby-alignable-keywords (parent-node)) 0)
-           ((n-p-gp "\\`\\(rescue\\|ensure\\|else\\)\\'" "body_statement" ,treesit-defun-type-regexp)
+           ((n-p-gp "\\`\\(rescue\\|ensure\\|else\\)\\'" "body_statement" ,ruby-ts-mode--method-regex)
             (option-ruby-alignable-keywords (grand-parent-node)) 0)
            ((n-p-gp nil "rescue\\|ensure\\|else" "body_statement") parent ruby-ts-mode-indent-offset)
-           ((match "body_statement" ,treesit-defun-type-regexp) ;first statement
+           ((match "body_statement" ,ruby-ts-mode--method-regex) ;first statement
             (option-ruby-alignable-keywords (parent-node)) ruby-ts-mode-indent-offset)
-           ((n-p-gp nil "body_statement" ,treesit-defun-type-regexp) ;other statements
+           ((n-p-gp nil "body_statement" ,ruby-ts-mode--method-regex) ;other statements
             (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
 
            ;; ((do-ruby-align-chained-calls) parent ruby-ts-mode-indent-offset)
@@ -910,12 +941,19 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; ruby-indent-after-block-in-continued-expression
            ((match "begin" "assignment") parent ruby-ts-mode-indent-offset)
 
+           ;; I like these but I'm going to disable them for now while
+           ;; I work on getting ruby-method-params-indent to work.
+           ;; method / block parameters / arguments with and without '('
+           ;; ((query "(method_parameters \"(\" _ @indent)") first-sibling 1)
+           ;; ((parent-is "method_parameters") first-sibling 0)
+           ((match ")" "method_parameters")
+            (ruby-ts-mode--method-params-indent) 0)
+           ((parent-is "method_parameters")
+            (ruby-ts-mode--method-params-indent) ruby-ts-mode-indent-offset)
+
            ((node-is ")") parent 0)
 
-           ;; method / block parameters / arguments with and without '('
-           ((query "(method_parameters \"(\" _ @indent)") first-sibling 1)
-           ((parent-is "method_parameters") first-sibling 0)
-           ((query "(argument_list \"(\" _ @indent)") first-sibling 1)
+           ;; ((query "(argument_list \"(\" _ @indent)") first-sibling 1)
            ((parent-is "argument_list") first-sibling 0)
            ((parent-is "block_parameters") first-sibling 1)
 
@@ -929,12 +967,21 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((node-is "]") first-sibling 0)
            ((parent-is "array") first-sibling 1)
 
+           ;; If the previous method isn't finished yet, this will get
+           ;; the next method indented properly.
+           ((n-p-gp ,ruby-ts-mode--method-regex "body_statement" ,ruby-ts-mode--class-or-module-regex)
+            (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+
+           ;; Match the end of a class / modlue
+           ((match "end" ,ruby-ts-mode--class-or-module-regex) parent 0)
+
+           ;; Try and indent two spaces when all else fails.
            (catch-all parent-bol ruby-ts-mode-indent-offset))))
     `((base ,@common))))
 
 (defun ruby-ts-mode--class-or-module-p (node)
   "Predicate if NODE is a class or module."
-  (string-match-p "class\\|module" (treesit-node-type node)))
+  (string-match-p ruby-ts-mode--class-or-module-regex (treesit-node-type node)))
 
 (defun ruby-ts-mode--get-name (node)
   "Return the text of the `name' field of NODE."
@@ -1037,12 +1084,6 @@ Assumes NODE's type is method or singleton_method."
                     (treesit-node-text n t))
                   (list first third)))))))
 
-(defconst ruby-ts-mode--class-or-module-regex
-  (rx string-start
-      (or "class" "module" "singleton_class")
-      string-end)
-  "Regular expression that matches a class or module's node type.")
-
 (defun ruby-ts-mode--log-current-function ()
   "Return the current method name as a string.
 The hash (#) is for instance methods only which are methods
@@ -1050,7 +1091,7 @@ The hash (#) is for instance methods only which are methods
 dot (.) is used.  Double colon (::) is used between classes.  The
 leading double colon is not added."
   (let* ((node (treesit-node-at (point)))
-         (method (treesit-parent-until node (treesit-type-pred treesit-defun-type-regexp)))
+         (method (treesit-parent-until node (treesit-type-pred ruby-ts-mode--method-regex)))
          (class (or method node))
          (result nil)
          (sep "#")
@@ -1110,10 +1151,7 @@ leading double colon is not added."
   :syntax-table ruby-ts-mode--syntax-table
 
   ;; Navigation.
-  (setq-local treesit-defun-type-regexp
-              (rx string-start
-                  (or "method" "singleton_method")
-                  string-end))
+  (setq-local treesit-defun-type-regexp ruby-ts-mode--method-regex)
 
   ;; AFAIK, Ruby can not nest methods
   (setq-local treesit-defun-prefer-top-level nil)
