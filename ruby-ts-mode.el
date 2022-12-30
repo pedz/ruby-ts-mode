@@ -723,22 +723,54 @@ See `ruby-align-chained-calls' for details."
          (equal "call" (treesit-node-type parent)))))
 
 (defun ruby-ts-mode--method-params-indent ()
-  "Align method parameters as specified by `ruby-method-params-indent'."
+  "Align method parameters as specified by `ruby-method-params-indent'.
+This routine has four modes:
+
+Args start on same line:
+def foo(arg1,
+        arg2)
+
+Args but no parens:
+def foo arg1,
+        arg2
+
+Args start on next line, ruby-method-params-indent is 0
+def foo(
+  arg1,
+  arg2
+)
+
+and
+
+Args start on next line, ruby-method-params-indent is t
+def foo(
+      arg1,
+      arg2
+    )"
   (lambda (node parent &rest _)
     "PARENT will be method_paramters"
     (let* ((method (treesit-node-parent parent))
+           (first-arg (treesit-node-child parent 0 t))
            (from-name (eq t ruby-method-params-indent)))
-      (if from-name
-          ;; For methods, the "name" is the name of the method but for
-          ;; singleton methods, we need to find "object"
-          (let* ((singleton (equal "singleton_method" (treesit-node-type method)))
-                 (name-node (treesit-node-child-by-field-name
-                             method
-                             (if singleton "object" "name"))))
-            (message "singleton: %S method: %S" singleton method)
-            (treesit-node-start name-node))
-        (+ (treesit-node-start method)
-           (or ruby-method-params-indent 0))))))
+      ;; first arg on same line as def
+      (if (= (rtsn--lineno method) (rtsn--lineno first-arg))
+          (let* ((node-type (treesit-node-type node))
+                 (paren (treesit-node-child parent 0)))
+            ;; if there is a closing ) there must be an opening (
+            (if (equal ")" node-type)
+                (treesit-node-start paren)
+              ;; the rule is going to add ruby-ts-mode-indent-offset back in
+              (- (treesit-node-start first-arg) ruby-ts-mode-indent-offset)))
+        (if from-name
+            ;; For methods, the "name" is the name of the method but for
+            ;; singleton methods, we need to find "object"
+            (let* ((singleton (equal "singleton_method" (treesit-node-type method)))
+                   (name-node (treesit-node-child-by-field-name
+                               method
+                               (if singleton "object" "name"))))
+              (treesit-node-start name-node))
+          (+ (treesit-node-start method)
+             (or ruby-method-params-indent 0)))))))
 
 (defalias 'ancestor-node #'ancestor-is
   "Return ancestor node whose type matches regexp TYPE.")
