@@ -817,13 +817,22 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp nil "then" "in_clause") grand-parent ruby-ts-mode-indent-offset)
            ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
 
+           ;; The beauty of inconsistency :-)
+           ;; while / until have only "do" as a child.  The "end" is a
+           ;; child of "do".
+           ((n-p-gp "end" "do" "while\\|until")
+            (option-ruby-alignable-keywords (grand-parent-node)) 0)
+           ((n-p-gp nil "do" "while\\|until")
+            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+            
            ;; ((do-ruby-align-chained-calls) parent ruby-ts-mode-indent-offset)
            ((match "\\." "call") (ruby-ts-mode--align-call) 0)
 
+           ;; Old code before option-ruby-alignable-keywords
            ;; "while" and "until" have a "do" child that have
            ;; statements as their children.
-           ((n-p-gp "end" "do" "while") grand-parent 0)
-           ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
+           ;; ((n-p-gp "end" "do" "while") grand-parent 0)
+           ;; ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
            
            ((node-is ")") parent 0)
            ;; What I had before -- remove both for now.
