@@ -333,10 +333,6 @@ next line."
   "Return t if NODE type is comment."
   (string-match-p "comment" (treesit-node-type node)))
 
-(defun rtsn--lineno (node)
-  "Return line number of NODE's start."
-  (line-number-at-pos (treesit-node-start node)))
-
 (defun rtsn--statement (point forward)
   "Return cons ( start of statement . end of statement ).
 Starting at POINT and moving forward if FORWARD, else backwards, the

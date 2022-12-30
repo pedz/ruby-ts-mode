@@ -208,6 +208,7 @@
 ;;; Code:
 
 (require 'treesit)
+(require 'ruby-mode)
 
 (declare-function treesit-parser-create "treesit.c")
 
@@ -250,33 +251,35 @@ verses           or
   :type 'boolean
   :group 'ruby)
 
-(defcustom ruby-ts-mode-indent-split-exp-by-term t
-  "Indent expressions split across lines as `ruby-mode' did.
+;; I need to come back and revisit this after the tests are working.
+;;
+;; (defcustom ruby-ts-mode-indent-split-exp-by-term t
+;;   "Indent expressions split across lines as `ruby-mode' did.
 
-If set to true, long expressions that are split across lines will be
-indented like `enh-ruby-mode' would indent the lines which is similar
-to `c-mode'.  Thus:
+;; If set to true, long expressions that are split across lines will be
+;; indented like `enh-ruby-mode' would indent the lines which is similar
+;; to `c-mode'.  Thus:
 
-with_paren = (a + b *
-              c * d +
-              12)
+;; with_paren = (a + b *
+;;               c * d +
+;;               12)
 
-without_paren = a + b *
-  c * d +
-  12
+;; without_paren = a + b *
+;;   c * d +
+;;   12
 
-If set to nil, long expressions are indented based upon the expression
-parsed hierarchy which is similar to how `ruby-mode' indented.  Thus:
+;; If set to nil, long expressions are indented based upon the expression
+;; parsed hierarchy which is similar to how `ruby-mode' indented.  Thus:
 
-with_paren = (a + b *
-                  c * d +
-              12)
+;; with_paren = (a + b *
+;;                   c * d +
+;;               12)
 
-without_paren = a + b *
-                    c * d +
-                12"
-  :type 'boolean
-  :group 'ruby)
+;; without_paren = a + b *
+;;                     c * d +
+;;                 12"
+;;   :type 'boolean
+;;   :group 'ruby)
 
 (defcustom ruby-ts-mode-include-predefined-constants t
   "Font lock Ruby pre-defined global constants.
@@ -424,6 +427,10 @@ These are currently unused")
           "$stdout" "$VERBOSE" "$-a" "$-i" "$-l" "$-p"
           (seq "$" (+ digit))))
   "Ruby global variables (but not global constants.")
+
+(defun rtsn--lineno (node)
+  "Return line number of NODE's start."
+  (line-number-at-pos (treesit-node-start node)))
 
 ;; doc/keywords.rdoc in the Ruby git repository considers these to be
 ;; reserved keywords.  If these keywords are added to the list, it
@@ -654,6 +661,30 @@ Returns bol of the current line if PRED returns nil."
     ;; (message "ancestor-is node: %S" node)
     (treesit-parent-until node (treesit-type-pred type))))
 
+(defun ruby-ts-mode--align-call ()
+  "Align chained method calls.
+See `ruby-align-chained-calls' for details."
+  (lambda (node parent &rest _)
+    (message "node: %S; parent: %S" node parent)
+    (if ruby-align-chained-calls
+        (let* ( temp )
+          (while (and parent
+                      (setq temp (treesit-node-parent parent))
+                      (message "moving up: temp: %S" temp)
+                      (string-match-p "call" (treesit-node-type temp)))
+            (setq parent temp))
+          (setq temp (treesit-search-subtree parent "\\." nil t))
+          (message "dot: %S" temp)
+          (treesit-node-start temp))
+      (+ (treesit-node-start parent) ruby-ts-mode-indent-offset))))
+
+(defun do-ruby-align-chained-calls ()
+  "To Be Documented"
+  (lambda (node parent &rest _)
+    (and ruby-align-chained-calls
+         (equal "." (treesit-node-type node))
+         (equal "call" (treesit-node-type parent)))))
+
 (defalias 'ancestor-node #'ancestor-is
   "Return ancestor node whose type matches regexp TYPE.")
 
@@ -711,7 +742,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
            ((n-p-gp nil "block_body" "block") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
            ((match "}" "block") (bol (grand-parent-node)) 0)
-           ((match "." "call") parent ruby-ts-mode-indent-offset)
+
+           ;; ((do-ruby-align-chained-calls) parent ruby-ts-mode-indent-offset)
+           ((match "\\." "call") (ruby-ts-mode--align-call) 0)
 
            ;; "while" and "until" have a "do" child that have
            ;; statements as their children.
@@ -719,7 +752,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
            
            ((node-is ")") parent 0)
-           ((node-is "end") parent 0)
+           ;; What I had before
+           ;; ((node-is "end") parent 0)
+           ((node-is "end") parent-bol 0)
            ((parent-is "begin") parent ruby-ts-mode-indent-offset)
 
            ,@(when ruby-ts-mode-right-justify-arrays
@@ -735,15 +770,18 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((parent-is "block_parameters") first-sibling 1)
 
 
-           ,@(when ruby-ts-mode-indent-split-exp-by-term
-               '(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
-                 ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
+           ;; I need to come back and revisit this after the tests are working.
+           ;;
+           ;; ,@(when ruby-ts-mode-indent-split-exp-by-term
+           ;;     '(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
+           ;;       ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
 
            ((parent-is "binary") first-sibling 0)
 
            ;; "when" list spread across multiple lines
            ((n-p-gp "pattern" "when" "case") (nth-sibling 1) 0)
            ((n-p-gp nil "then" "when") grand-parent ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
 
            ;; if then else elseif notes:
            ;;
@@ -858,6 +896,86 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
         (goto-char pos)
       (error "Something didn't work"))))
 
+(defun ruby-ts-mode--class-name (node)
+  "Return NODE's name.
+Assumes NODE's type is \"class\" or \"method\""
+  (list
+   (treesit-node-text
+    (treesit-node-child-by-field-name
+     node
+     (if (equal "singleton_class" (treesit-node-type node)) "value" "name"))
+    t)))
+  
+(defun ruby-ts-mode--method-name (node)
+  "Return the method name of NODE.
+Assumes NODE's type is method or singleton_method."
+  (if (equal "method" (treesit-node-type node))
+      (list (treesit-node-text (treesit-node-child-by-field-name node "name") t))
+    (let* ((children (treesit-node-children node))
+           ;; 0th is "def"
+           (first (nth 1 children))
+           (third (nth 3 children)))
+      (cond
+       ((equal "(" (treesit-node-type first))
+        (list (treesit-node-text (nth 2 children) t)
+              (treesit-node-text (nth 5 children) t)))
+       ;; ((equal "self" (treesit-node-type first))
+       ;;  (list (treesit-node-text third t)))
+       (t (mapcar (lambda (n)
+                    (treesit-node-text n t))
+                  (list first third)))))))
+
+(defconst ruby-ts-mode--class-or-module-regex
+  (rx string-start
+      (or "class" "module" "singleton_class")
+      string-end)
+  "Regular expression that matches a class or module's node type.")
+
+(defun ruby-ts-mode--log-current-function ()
+  "Return the current method name as a string.
+The hash (#) is for instance methods only which are methods
+\"defined on a class\" -- which is 99% of methods.  Otherwise, a
+dot (.) is used.  Double colon (::) is used between classes.  The
+leading double colon is not added."
+  (let* ((node (treesit-node-at (point)))
+         (method (treesit-parent-until node (treesit-type-pred treesit-defun-type-regexp)))
+         (class (or method node))
+         (result nil)
+         (sep "#")
+         (method-list nil)
+         (class-list nil)
+         (method-name nil))
+
+    (when method
+      (setq method-list (ruby-ts-mode--method-name method))
+      (unless (= 1 (length method-list))
+        (setq sep ".")))
+    (while (setq class (treesit-parent-until class
+                                             (treesit-type-pred
+                                              ruby-ts-mode--class-or-module-regex)))
+      (setq class-list (append (ruby-ts-mode--class-name class) class-list)))
+    (message "class-list: %S method-list:%S" class-list method-list)
+    (setq method-name (car (last method-list))
+          method-list (butlast method-list))
+    (when (equal (car method-list) (car (last class-list)))
+      (setq method-list (cdr method-list)))
+    (message "class-list: %S method-list:%S method-name:%S" class-list method-list method-name)
+    (dolist (ele (append class-list method-list))
+      (cond
+       ((equal "self" ele)
+        (setq sep "."))
+       ((string-match-p "\\`[^A-Z]" ele) ;not a class
+        (setq sep "."
+              result (if result
+                         (concat result "::" ele)
+                       ele)))
+       (t (setq result (if result
+                           (concat result "::" ele)
+                         ele)))))
+    (if method-name
+        (concat result sep method-name)
+      result)))
+
 (defvar-keymap ruby-ts-mode--arrow-keys
   :doc "Transient keymap for arrow keys"
   ;; "<right>" #'rtsn-forward-argument-start
@@ -914,6 +1032,8 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
     (error "Tree-sitter for Ruby isn't available"))
 
   (treesit-parser-create 'ruby)
+
+  (setq-local add-log-current-defun-function #'ruby-ts-mode--log-current-function)
 
   ;; Comments.
   (setq-local comment-start "# ")

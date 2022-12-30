@@ -1,12 +1,22 @@
 #!/usr/bin/env ruby
 
-# dog When writing indent rules, you can use ‘treesit-check-indent’ to
+# dog When writing indent rules, you can use ‘-check-indent’ to
 # check if your indentation is correct. To debug what went wrong, set
 # ‘treesit--indent-verbose’ to non-nil. Then when you indent, Emacs
 # tells you which rule is applied in the echo area.
-module Doggy
-  def doggy
-    @frog = banana
+class Happy
+  module Doggy
+    def daft
+      foo = bar
+    end
+    
+    def Doggy.doggy
+      @frog = banana
+    end
+
+    def (18+12)::house
+      @banana
+    end
   end
 end
 

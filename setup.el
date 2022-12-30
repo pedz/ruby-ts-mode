@@ -1,3 +1,7 @@
+
+
+(add-to-list 'load-path (file-name-directory load-file-name))
+
 (deftheme test "Theme used for testing")
 
 (custom-theme-set-faces
