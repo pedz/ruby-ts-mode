@@ -2,6 +2,9 @@
 
 (add-to-list 'load-path (file-name-directory load-file-name))
 
+(define-key ruby-mode-map (kbd "s-<right>") #'forward-sexp)
+(define-key ruby-mode-map (kbd "s-<left>") #'backward-sexp)
+
 (deftheme test "Theme used for testing")
 
 (custom-theme-set-faces

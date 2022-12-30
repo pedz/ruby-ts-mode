@@ -46,7 +46,7 @@ x = toto / foo if /do bar/ =~ "dobar"
 
 foo { /"tee/
   bar { |qux| /'fee"/ }         # bug#20026
-}
+    }
 
 bar(class: XXX) do              # ruby-indent-keyword-label
   foo
@@ -58,11 +58,11 @@ foo = [1,                       # ruby-deep-indent
 
 foo = {                         # ruby-deep-indent-disabled
   a: b
-  }
+}
 
 foo = { a: b,
   a1: b1
-  }
+}
 
 foo({                           # bug#16118
      a: b,
@@ -72,10 +72,10 @@ foo({                           # bug#16118
 bar = foo(
           a, [
    1,
-  ],
+             ],
           :qux => [
              3
-  ])
+                  ])
 
 foo(
     [
@@ -134,15 +134,15 @@ def test2 (arg)
   end
 
   b = case a
-    when "a"
-    6
-    # Support for this syntax was removed in Ruby 1.9, so we
-    # probably don't need to handle it either.
-    # when "b" :
-    #   7
-    # when "c" : 2
-    when "d"  then 4
-    else 5
+      when "a"
+        6
+        # Support for this syntax was removed in Ruby 1.9, so we
+        # probably don't need to handle it either.
+        # when "b" :
+        #   7
+        # when "c" : 2
+      when "d"  then 4
+      else 5
       end
 end
 
@@ -185,18 +185,18 @@ c = ??
 
 # Example from https://ruby-doc.com/docs/ProgrammingRuby/
 d = 4 + 5 +      # no '\' needed
-  6 + 7
+    6 + 7
 
 # Example from https://www.ruby-doc.org/docs/ProgrammingRuby/
 e = 8 + 9   \
-  + 10         # '\' needed
+    + 10         # '\' needed
 
 foo = obj.bar { |m| tee(m) } +
-  obj.qux { |m| hum(m) }
+      obj.qux { |m| hum(m) }
 
 begin
   foo
-  ensure
+ensure
   bar
 end
 
@@ -215,7 +215,7 @@ class C
 end
 
 a = foo(j, k) -
-  bar_tee
+    bar_tee
 
 while a < b do # "do" is optional
   foo
@@ -233,10 +233,10 @@ foo # comment intended to confuse the tokenizer
 
 z = {
   foo: {
-  a: "aaa",
-  b: "bbb"
-  }
-  }
+        a: "aaa",
+        b: "bbb"
+       }
+}
 
 foo if
   bar
@@ -281,11 +281,11 @@ end
 it("is too!") {
   bar
     .qux
-}
+              }
 
 and_this_one(has) { |block, parameters|
   tee
-}
+                  }
 
 if foo &&
    bar
@@ -351,14 +351,14 @@ abc(foo
 
 # https://stackoverflow.com/questions/17786563/emacs-ruby-mode-if-expressions-indentation
 tee = if foo
-  bar
-  else
-  tee
+        bar
+      else
+        tee
       end
 
 a = b {
   c
-}
+      }
 
 aa = bb do
   cc
@@ -390,7 +390,7 @@ end
 
 bar.foo(tee) {
   bar
-}
+             }
 
 bar 1 do
   foo 2 do
@@ -405,13 +405,13 @@ def qux
   foo ||= begin
             bar
             tee
-            rescue
-    oomph
+          rescue
+            oomph
           end
 end
 
 private def foo
-  bar
+          bar
         end
 
 %^abc^
@@ -456,7 +456,7 @@ foo(:bar =>
 regions = foo(
               OpenStruct.new(id: 0, name: "foo") => [
                  10
-  ]
+                                                    ]
              )
 
 {'a' => {

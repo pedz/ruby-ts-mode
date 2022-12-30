@@ -757,17 +757,20 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; that this is not dynamic.  I plan to rewrite these so
            ;; that the value of the option is retrieved at the time
            ;; the line is indented like I'm doing elsewhere.
-           ,@(when ruby-ts-mode-call-block
-               '(((n-p-gp "end" "do_block" "call") (bol (grand-parent-node)) 0)
-                 ((n-p-gp nil "do_block" "call") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
-                 ((parent-is "body_statement") first-sibling 0)))
-           ((node-is "body_statement") parent-bol ruby-ts-mode-indent-offset)
-           ((parent-is "body_statement") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
-           ((match "end" "do_block") parent-bol 0)
+           ;;
+           ;; Old code -- need to figure out where / when this was used.
+           ;;
+           ;; ,@(when ruby-ts-mode-call-block
+           ;;     '(((n-p-gp "end" "do_block" "call") (bol (grand-parent-node)) 0)
+           ;;       ((n-p-gp nil "do_block" "call") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+           ;;       ((parent-is "body_statement") first-sibling 0)))
+           ;; ((node-is "body_statement") parent-bol ruby-ts-mode-indent-offset)
+           ;; ((parent-is "body_statement") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+           ;; ((match "end" "do_block") parent-bol 0)
 
-           ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
-           ((n-p-gp nil "block_body" "block") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
-           ((match "}" "block") (bol (grand-parent-node)) 0)
+           ;; ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
+           ;; ((n-p-gp nil "block_body" "block") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+           ;; ((match "}" "block") (bol (grand-parent-node)) 0)
 
            ;; if then else elseif notes:
            ;;
@@ -825,6 +828,44 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp nil "do" "while\\|until")
             (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
             
+           ;; begin can have rescue, ensure, else, and end.
+           ;; statements are a child of begin.  rescue, ensure, else,
+           ;; and end are also children of begin.  rescue has a then
+           ;; as a child thus statements will be grand children of
+           ;; rescue.
+           ((n-p-gp nil "then" "rescue")
+            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "ensure\\|else" "begin")
+            (option-ruby-alignable-keywords (parent-node)) ruby-ts-mode-indent-offset)
+           ((match "rescue\\|ensure\\|else\\|end" "begin")
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((parent-is "begin")         ;last
+            (option-ruby-alignable-keywords (parent-node)) ruby-ts-mode-indent-offset)            
+
+           ;; for ... I don't think I have ever used a for loop in
+           ;; Ruby.  The "in" (not an in_clause) and "do" are
+           ;; children.  The statements are children of the "do".
+           ;; And, of course, the "end" is a child of the "do".
+           ((n-p-gp "end" "do" "for")
+            (option-ruby-alignable-keywords (grand-parent-node)) 0)
+           ((n-p-gp nil "do" "for")
+            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+
+           ;; method has a "body_statement" and the "end" as children.
+           ;; The body_statement can have rescue, ensure, and else as
+           ;; well as statements.  Note that the first statement of a
+           ;; body_statement hits the node as "body_statement" and not
+           ;; as the assignment, etc.
+           ((match "end" ,treesit-defun-type-regexp)
+            (option-ruby-alignable-keywords (parent-node)) 0)
+           ((n-p-gp "\\`\\(rescue\\|ensure\\|else\\)\\'" "body_statement" ,treesit-defun-type-regexp)
+            (option-ruby-alignable-keywords (grand-parent-node)) 0)
+           ((n-p-gp nil "rescue\\|ensure\\|else" "body_statement") parent ruby-ts-mode-indent-offset)
+           ((match "body_statement" ,treesit-defun-type-regexp) ;first statement
+            (option-ruby-alignable-keywords (parent-node)) ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "body_statement" ,treesit-defun-type-regexp) ;other statements
+            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+
            ;; ((do-ruby-align-chained-calls) parent ruby-ts-mode-indent-offset)
            ((match "\\." "call") (ruby-ts-mode--align-call) 0)
 
@@ -835,10 +876,13 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
            
            ((node-is ")") parent 0)
+
            ;; What I had before -- remove both for now.
            ;; ((node-is "end") parent 0)
            ;; ((node-is "end") parent-bol 0)
-           ((parent-is "begin") parent ruby-ts-mode-indent-offset)
+
+           ;; old code before option-ruby-alignable-keywords
+           ;; ((parent-is "begin") parent ruby-ts-mode-indent-offset)
 
            ,@(when ruby-ts-mode-right-justify-arrays
                '(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
@@ -859,7 +903,8 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;;     '(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
            ;;       ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
 
-           ((parent-is "binary") first-sibling 0)
+           ;; Changed for ruby-align-to-stmt-keywords-t
+           ((parent-is "binary") first-sibling ruby-ts-mode-indent-offset)
 
            ;; "when" list spread across multiple lines
            ;; old code...
@@ -1064,8 +1109,9 @@ leading double colon is not added."
 
   ;; Navigation.
   (setq-local treesit-defun-type-regexp
-              (regexp-opt '("method"
-                            "singleton_method")))
+              (rx string-start
+                  (or "method" "singleton_method")
+                  string-end))
 
   ;; AFAIK, Ruby can not nest methods
   (setq-local treesit-defun-prefer-top-level nil)
