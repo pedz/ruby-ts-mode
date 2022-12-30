@@ -47,6 +47,11 @@
   (treesit-font-lock-recompute-features)
   (treesit-inspect-mode))
 
+(defun ts ()
+  (interactive)
+  (ruby-ts-mode)
+  (treesit-explore-mode 'ruby))
+
 ;; (treesit-query-validate 'ruby ruby-ts-mode--operators)
 (global-set-key (kbd "H-c") #'describe-char)
 

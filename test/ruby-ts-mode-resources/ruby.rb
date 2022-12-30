@@ -1,13 +1,13 @@
 if something_wrong?             # ruby-move-to-block-skips-heredoc
   ActiveSupport::Deprecation.warn(<<-eowarn)
-                                              boo hoo
-                                              end
-                                                                    eowarn
+  boo hoo
+  end
+  eowarn
   foo
 
   foo(<<~squiggly)
-                    end
-                                                                    squiggly
+  end
+  squiggly
 end
 
 def foo
@@ -17,8 +17,8 @@ end
 # Percent literals.
 b = %Q{This is a "string"}
 c = %w!foo
-  bar
-  baz!
+ bar
+ baz!
 d = %(hello (nested) world)
 
 # Don't propertize percent literals inside strings.
@@ -46,7 +46,7 @@ x = toto / foo if /do bar/ =~ "dobar"
 
 foo { /"tee/
   bar { |qux| /'fee"/ }         # bug#20026
-    }
+}
 
 bar(class: XXX) do              # ruby-indent-keyword-label
   foo
@@ -54,56 +54,56 @@ end
 bar
 
 foo = [1,                       # ruby-deep-indent
-                         2]
+       2]
 
 foo = {                         # ruby-deep-indent-disabled
   a: b
 }
 
 foo = { a: b,
-  a1: b1
-}
+        a1: b1
+      }
 
 foo({                           # bug#16118
-     a: b,
-     c: d
+      a: b,
+      c: d
     })
 
 bar = foo(
-          a, [
-   1,
-             ],
-          :qux => [
-             3
-                  ])
+  a, [
+    1,
+  ],
+  :qux => [
+    3
+  ])
 
 foo(
-    [
-     {
-      a: b
-     },
-    ],
+  [
     {
-     c: d
-    }
-   )
+      a: b
+    },
+  ],
+  {
+    c: d
+  }
+)
 
 foo([{
-      a: 2
+       a: 2
      },
      {
-      b: 3
+       b: 3
      },
-      4
+     4
     ])
 
 foo = [                         # ruby-deep-indent-disabled
-                                  1
-  ]
+  1
+]
 
 foo(                            # ruby-deep-indent-disabled
-    a
-   )
+  a
+)
 
 # Multiline regexp.
 /bars
@@ -136,11 +136,11 @@ def test2 (arg)
   b = case a
       when "a"
         6
-        # Support for this syntax was removed in Ruby 1.9, so we
-        # probably don't need to handle it either.
-        # when "b" :
-        #   7
-        # when "c" : 2
+      # Support for this syntax was removed in Ruby 1.9, so we
+      # probably don't need to handle it either.
+      # when "b" :
+      #   7
+      # when "c" : 2
       when "d"  then 4
       else 5
       end
@@ -159,8 +159,8 @@ if something == :==
   x = y + z # Bug#16609
 
   a = 1 ? 2 :(
-              2 + 3
-             )
+    2 + 3
+  )
 end
 
 # Bug#17097
@@ -202,7 +202,7 @@ end
 
 # Bug#15369
 MSG = 'Separate every 3 digits in the integer portion of a number' \
-  'with underscores(_).'
+      'with underscores(_).'
 
 class C
   def foo
@@ -233,9 +233,9 @@ foo # comment intended to confuse the tokenizer
 
 z = {
   foo: {
-        a: "aaa",
-        b: "bbb"
-       }
+    a: "aaa",
+    b: "bbb"
+  }
 }
 
 foo if
@@ -281,35 +281,35 @@ end
 it("is too!") {
   bar
     .qux
-              }
+}
 
 and_this_one(has) { |block, parameters|
   tee
-                  }
+}
 
 if foo &&
    bar
 end
 
 foo +
-bar
+  bar
 
 foo and
-bar
+  bar
 
 foo > bar &&
-tee < qux
+  tee < qux
 
 zux do
   foo == bar &&
-  tee == qux
+    tee == qux
 
   a = 3 and
-  b = 4
+    b = 4
 end
 
 foo + bar ==
-tee + qux
+  tee + qux
 
 1 .. 2 &&
      3
@@ -318,16 +318,16 @@ tee + qux
     5
 
 10 << 4 ^
-20
+  20
 
 100 + 2 >>
-3
+  3
 
 2 ** 10 /
-2
+  2
 
 foo ^
-bar
+  bar
 
 foo_bar_tee(1, 2, 3)
   .qux&.bar
@@ -358,7 +358,7 @@ tee = if foo
 
 a = b {
   c
-      }
+}
 
 aa = bb do
   cc
@@ -390,7 +390,7 @@ end
 
 bar.foo(tee) {
   bar
-             }
+}
 
 bar 1 do
   foo 2 do
@@ -399,7 +399,7 @@ bar 1 do
 end
 
 foo |
-bar
+  bar
 
 def qux
   foo ||= begin
@@ -411,37 +411,37 @@ def qux
 end
 
 private def foo
-          bar
-        end
+  bar
+end
 
 %^abc^
 ddd
 
 qux = foo.fee ?
-  bar :
-  tee
+        bar :
+        tee
 
 zoo.keep.bar!(
-              {x: y,
-               z: t})
+  {x: y,
+   z: t})
 
 zoo
   .lose(
-        q, p)
+    q, p)
 
 a.records().map(&:b).zip(
-                         foo)
+  foo)
 
 foo1 =
   subject.update(
-                 1
-                )
+    1
+  )
 
 foo2 =
   subject.
-  update(
-         2
-        )
+    update(
+      2
+    )
 
 # FIXME: This is not consistent with the example below it, but this
 # offset only happens if the colon is at eol, which wouldn't be often.
@@ -454,33 +454,33 @@ foo(:bar =>
     tee)
 
 regions = foo(
-              OpenStruct.new(id: 0, name: "foo") => [
-                 10
-                                                    ]
-             )
+  OpenStruct.new(id: 0, name: "foo") => [
+    10
+  ]
+)
 
 {'a' => {
-         'b' => 'c',
-         'd' => %w(e f)
-        }
+   'b' => 'c',
+   'd' => %w(e f)
+ }
 }
 
 # Bug#17050
 
 return render json: {
-                     errors: { base: [message] },
-                     copying: copying
-                    },
+                errors: { base: [message] },
+                copying: copying
+              },
               status: 400
 
 top test(
-         some,
-         top,
-         test)
+      some,
+      top,
+      test)
 
 foo bar, {
-          tee: qux
-         }
+      tee: qux
+    }
 
 # Bug#42846, bug#18644
 
@@ -519,20 +519,20 @@ class Bar
   def foo(...) = z
 
   def request_params = {
-                        headers: request_headers,
-                        body: request_body
-                       }
+    headers: request_headers,
+    body: request_body
+  }
 
   def self.foo(
-               baz,
-               bar
-              ) =
+        baz,
+        bar
+      ) =
     what
 
   def foo=(
-           baz,
-           bar
-          )
+        baz,
+        bar
+      )
     def baz.full_name = "#{bar} 3"
 
     baz

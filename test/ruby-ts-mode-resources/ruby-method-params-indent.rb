@@ -1,14 +1,14 @@
 class C
   def self.foo(
-               baz,
-               bar
-              ) =
+    baz,
+    bar
+  ) =
     what
 
   def foo=(
-           baz,
-           bar
-          )
+    baz,
+    bar
+  )
     hello
   end
 end

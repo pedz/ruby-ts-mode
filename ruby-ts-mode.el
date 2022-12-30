@@ -231,25 +231,27 @@ is expected return a list that follows the form of
                  (function :tag "A function for user customized style" ignore))
   :group 'ruby)
 
-(defcustom ruby-ts-mode-right-justify-arrays t
-  "Right justify elements in an array.
-
-e.g.             or
-  array = [            array = [   145,
-       145,                      21110,
-     21110,                         11]
-        11
-    ]
-
-verses           or
-
-  array = [            array = [145,
-    145,                 21110,
-    21110,               11]
-    11
-    ]"
-  :type 'boolean
-  :group 'ruby)
+;; Remove for now.
+;;
+;; (defcustom ruby-ts-mode-right-justify-arrays t
+;;   "Right justify elements in an array.
+;;
+;; e.g.             or
+;;   array = [            array = [   145,
+;;        145,                      21110,
+;;      21110,                         11]
+;;         11
+;;     ]
+;;
+;; verses           or
+;;
+;;   array = [            array = [145,
+;;     145,                 21110,
+;;     21110,               11]
+;;     11
+;;     ]"
+;;   :type 'boolean
+;;   :group 'ruby)
 
 ;; I need to come back and revisit this after the tests are working.
 ;;
@@ -547,7 +549,10 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 
    :language language
    :feature 'string
-   '((string_content) @font-lock-string-face)
+   '((string_content) @font-lock-string-face
+     (heredoc_beginning) @font-lock-string-face
+     (heredoc_content) @font-lock-string-face
+     (heredoc_end) @font-lock-string-face)
 
    :language language
    :feature 'interpolation
@@ -733,15 +738,8 @@ See `ruby-align-chained-calls' for details."
                          (+ grand-parent-bol max-length 1))))
 
     (- align-column node-length)))
-
-(defun ruby-ts-mode--indent-styles (_language)
-  "Indent rules supported by `ruby-ts-mode'.
-Currently LANGUAGE is ignored but should be set to `ruby'"
-  (let ((common
-         `(
-           ;; Slam all top level nodes to the left margin
-           ((parent-is "program") parent 0)
-
+           ;; REMOVED FROM ruby-ts-mode--indent-styles
+           ;;
            ;; a "do_block" has a "body_statement" child which has the
            ;; statements as children within it.  The problem is that
            ;; the first statement starts at the same point as the
@@ -772,6 +770,52 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; ((n-p-gp nil "block_body" "block") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
            ;; ((match "}" "block") (bol (grand-parent-node)) 0)
 
+           ;; Old code before option-ruby-alignable-keywords
+           ;; "while" and "until" have a "do" child that have
+           ;; statements as their children.
+           ;; ((n-p-gp "end" "do" "while") grand-parent 0)
+           ;; ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
+           
+           ;; What I had before -- remove both for now.
+           ;; ((node-is "end") parent 0)
+           ;; ((node-is "end") parent-bol 0)
+
+           ;; old code before option-ruby-alignable-keywords
+           ;; ((parent-is "begin") parent ruby-ts-mode-indent-offset)
+
+           ;; I want to redo this as well so lets just remove it for now.
+           ;; ,@(when ruby-ts-mode-right-justify-arrays
+           ;;     '(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
+           ;;        ruby-ts-mode--right-justify-array-leaf ruby-ts-mode-indent-offset)
+           ;;       ((n-p-gp "]" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)))
+
+           ;; I need to come back and revisit this after the tests are working.
+           ;;
+           ;; ,@(when ruby-ts-mode-indent-split-exp-by-term
+           ;;     '(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
+           ;;       ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
+
+           ;; "when" list spread across multiple lines
+           ;; old code...
+           ;; ((n-p-gp "pattern" "when" "case") (nth-sibling 1) 0)
+           ;; ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
+           ;; ((node-is "when")  parent-bol 0)
+
+           ;; Assignment of hash and array
+           ;; This needs to be controlled by an option.
+           ;; ((n-p-gp "}" "hash" "assignment") grand-parent 0)
+           ;; ((n-p-gp "pair" "hash" "assignment") grand-parent ruby-ts-mode-indent-offset)
+           ;; ((n-p-gp "]" "array" "assignment") grand-parent 0)
+           ;; ((n-p-gp ".*" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)
+
+(defun ruby-ts-mode--indent-styles (_language)
+  "Indent rules supported by `ruby-ts-mode'.
+Currently LANGUAGE is ignored but should be set to `ruby'"
+  (let ((common
+         `(
+           ;; Slam all top level nodes to the left margin
+           ((parent-is "program") parent 0)
+
            ;; if then else elseif notes:
            ;;
            ;;   1. The "then" starts at the end of the line that ends
@@ -796,12 +840,6 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
             (option-ruby-alignable-keywords (parent-node)) 0)
            ((n-p-gp nil "then\\|else\\|elsif" "if\\|unless")
             (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
-
-           ;; case expression can have "case" "when" "in" (called
-           ;; in_clause) "else" and "end".  "case" can be in
-           ;; ruby-align-to-stmt-keywords.  "when", etc are children
-           ;; of "case".  The statements under when is part of a
-           ;; "then" that is the child of "when".
 
            ;; case expression: when, in_clause, and else are all
            ;; children of case.  when and in_clause have pattern and
@@ -869,25 +907,10 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; ((do-ruby-align-chained-calls) parent ruby-ts-mode-indent-offset)
            ((match "\\." "call") (ruby-ts-mode--align-call) 0)
 
-           ;; Old code before option-ruby-alignable-keywords
-           ;; "while" and "until" have a "do" child that have
-           ;; statements as their children.
-           ;; ((n-p-gp "end" "do" "while") grand-parent 0)
-           ;; ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
-           
+           ;; ruby-indent-after-block-in-continued-expression
+           ((match "begin" "assignment") parent ruby-ts-mode-indent-offset)
+
            ((node-is ")") parent 0)
-
-           ;; What I had before -- remove both for now.
-           ;; ((node-is "end") parent 0)
-           ;; ((node-is "end") parent-bol 0)
-
-           ;; old code before option-ruby-alignable-keywords
-           ;; ((parent-is "begin") parent ruby-ts-mode-indent-offset)
-
-           ,@(when ruby-ts-mode-right-justify-arrays
-               '(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
-                  ruby-ts-mode--right-justify-array-leaf ruby-ts-mode-indent-offset)
-                 ((n-p-gp "]" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)))
 
            ;; method / block parameters / arguments with and without '('
            ((query "(method_parameters \"(\" _ @indent)") first-sibling 1)
@@ -896,27 +919,8 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((parent-is "argument_list") first-sibling 0)
            ((parent-is "block_parameters") first-sibling 1)
 
-
-           ;; I need to come back and revisit this after the tests are working.
-           ;;
-           ;; ,@(when ruby-ts-mode-indent-split-exp-by-term
-           ;;     '(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
-           ;;       ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
-
            ;; Changed for ruby-align-to-stmt-keywords-t
            ((parent-is "binary") first-sibling ruby-ts-mode-indent-offset)
-
-           ;; "when" list spread across multiple lines
-           ;; old code...
-           ;; ((n-p-gp "pattern" "when" "case") (nth-sibling 1) 0)
-           ;; ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
-           ;; ((node-is "when")  parent-bol 0)
-
-           ;; Assignment of hash and array
-           ((n-p-gp "}" "hash" "assignment") grand-parent 0)
-           ((n-p-gp "pair" "hash" "assignment") grand-parent ruby-ts-mode-indent-offset)
-           ((n-p-gp "]" "array" "assignment") grand-parent 0)
-           ((n-p-gp ".*" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)
 
            ;; hash and array other than assignments.  Note that the
            ;; first sibling is the "{" or "[".
@@ -925,9 +929,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((node-is "]") first-sibling 0)
            ((parent-is "array") first-sibling 1)
 
-           ;; method call arguments with and without '('
-
-           )))
+           (catch-all parent-bol ruby-ts-mode-indent-offset))))
     `((base ,@common))))
 
 (defun ruby-ts-mode--class-or-module-p (node)
