@@ -1,13 +1,13 @@
 if something_wrong?             # ruby-move-to-block-skips-heredoc
   ActiveSupport::Deprecation.warn(<<-eowarn)
-    boo hoo
-    end
-    eowarn
+  boo hoo
+  end
+  eowarn
   foo
 
   foo(<<~squiggly)
-    end
-    squiggly
+  end
+  squiggly
 end
 
 def foo
@@ -17,8 +17,8 @@ end
 # Percent literals.
 b = %Q{This is a "string"}
 c = %w!foo
-     bar
-     baz!
+ bar
+ baz!
 d = %(hello (nested) world)
 
 # Don't propertize percent literals inside strings.
@@ -46,69 +46,69 @@ x = toto / foo if /do bar/ =~ "dobar"
 
 foo { /"tee/
   bar { |qux| /'fee"/ }         # bug#20026
-    }
+}
 
 bar(class: XXX) do              # ruby-indent-keyword-label
   foo
-  end
+end
 bar
 
 foo = [1,                       # ruby-deep-indent
        2]
 
 foo = {                         # ruby-deep-indent-disabled
-       a: b
-      }
+  a: b
+}
 
 foo = { a: b,
-       a1: b1
+        a1: b1
       }
 
 foo({                           # bug#16118
-     a: b,
-     c: d
+      a: b,
+      c: d
     })
 
 bar = foo(
-          a, [
-              1,
-             ],
-          :qux => [
-                   3
-                  ])
+  a, [
+    1,
+  ],
+  :qux => [
+    3
+  ])
 
 foo(
-    [
-     {
-      a: b
-     },
-    ],
+  [
     {
-     c: d
-    }
-   )
+      a: b
+    },
+  ],
+  {
+    c: d
+  }
+)
 
 foo([{
-      a: 2
+       a: 2
      },
      {
-      b: 3
+       b: 3
      },
      4
     ])
 
 foo = [                         # ruby-deep-indent-disabled
-       1
-      ]
+  1
+]
 
 foo(                            # ruby-deep-indent-disabled
-    a
-   )
+  a
+)
 
 # Multiline regexp.
 /bars
-  tees # toots
-  nfoos::/
+ tees # toots
+ nfoos::/
 
 def test1(arg)
   puts "hello"
@@ -136,11 +136,11 @@ def test2 (arg)
   b = case a
       when "a"
         6
-        # Support for this syntax was removed in Ruby 1.9, so we
-        # probably don't need to handle it either.
-        # when "b" :
-        #   7
-        # when "c" : 2
+      # Support for this syntax was removed in Ruby 1.9, so we
+      # probably don't need to handle it either.
+      # when "b" :
+      #   7
+      # when "c" : 2
       when "d"  then 4
       else 5
       end
@@ -149,7 +149,7 @@ end
 # Some Cucumber code:
 Given /toto/ do
   print "hello"
-  end
+end
 
 # Bug#15208
 if something == :==
@@ -160,7 +160,7 @@ if something == :==
 
   a = 1 ? 2 :(
     2 + 3
-             )
+  )
 end
 
 # Bug#17097
@@ -185,14 +185,14 @@ c = ??
 
 # Example from https://ruby-doc.com/docs/ProgrammingRuby/
 d = 4 + 5 +      # no '\' needed
-      6 + 7
+    6 + 7
 
 # Example from https://www.ruby-doc.org/docs/ProgrammingRuby/
 e = 8 + 9   \
-      + 10         # '\' needed
+    + 10         # '\' needed
 
 foo = obj.bar { |m| tee(m) } +
-        obj.qux { |m| hum(m) }
+      obj.qux { |m| hum(m) }
 
 begin
   foo
@@ -202,7 +202,7 @@ end
 
 # Bug#15369
 MSG = 'Separate every 3 digits in the integer portion of a number' \
-  'with underscores(_).'
+      'with underscores(_).'
 
 class C
   def foo
@@ -215,28 +215,29 @@ class C
 end
 
 a = foo(j, k) -
-      bar_tee
+    bar_tee
 
 while a < b do # "do" is optional
   foo
 end
 
 desc "foo foo" \
-  "bar bar"
+     "bar bar"
 
 foo.
   bar
+  .baz
 
 # https://github.com/rails/rails/blob/17f5d8e062909f1fcae25351834d8e89967b645e/activesupport/lib/active_support/time_with_zone.rb#L206
 foo # comment intended to confuse the tokenizer
   .bar
 
 z = {
-     foo: {
-           a: "aaa",
-           b: "bbb"
-          }
-    }
+  foo: {
+    a: "aaa",
+    b: "bbb"
+  }
+}
 
 foo if
   bar
@@ -276,19 +277,19 @@ desc "abc",
 
 it "is a method call with block" do |asd|
   foo
-  end
+end
 
 it("is too!") {
   bar
     .qux
-              }
+}
 
 and_this_one(has) { |block, parameters|
   tee
-                  }
+}
 
 if foo &&
-     bar
+   bar
 end
 
 foo +
@@ -304,18 +305,18 @@ zux do
   foo == bar &&
     tee == qux
 
-    a = 3 and
-      b = 4
-  end
+  a = 3 and
+    b = 4
+end
 
 foo + bar ==
   tee + qux
 
 1 .. 2 &&
-       3
+     3
 
 3 < 4 +
-      5
+    5
 
 10 << 4 ^
   20
@@ -337,7 +338,7 @@ foo_bar_tee(1, 2, 3)
 foo do
   bar
     .tee
-  end
+end
 
 def bar
   foo
@@ -358,45 +359,63 @@ tee = if foo
 
 a = b {
   c
-      }
+}
 
 aa = bb do
   cc
-  end
+end
 
 foo :bar do
   qux
-  end
+end
 
 foo do |*args|
   tee
-  end
+end
 
 bar do |&block|
   tee
-  end
+end
 
 foo = [1, 2, 3].map do |i|
   i + 1
-  end
+end
+
+m1 = foo
+       .asdasd
+       .proc do |**args|
+  p(**args)
+end
+
+m2 = foo
+       .asdasd
+       .proc { |**args|
+  p(**args)
+}
 
 bar.foo do
   bar
-  end
+end
 
 bar.foo(tee) do
   bar
-  end
+end
 
 bar.foo(tee) {
   bar
-             }
+}
 
 bar 1 do
   foo 2 do
     tee
-    end
   end
+end
+
+x.foo do
+  foo
+end.bar do
+  bar
+end
 
 foo |
   bar
@@ -411,76 +430,76 @@ def qux
 end
 
 private def foo
-          bar
-        end
+  bar
+end
 
 %^abc^
 ddd
 
 qux = foo.fee ?
-  bar :
-  tee
+        bar :
+        tee
 
 zoo.keep.bar!(
-              {x: y,
-               z: t})
+  {x: y,
+   z: t})
 
 zoo
   .lose(
-        q, p)
+    q, p)
 
 a.records().map(&:b).zip(
-                         foo)
+  foo)
 
 foo1 =
   subject.update(
-                 1
-                )
+    1
+  )
 
 foo2 =
   subject.
     update(
-           2
-          )
+      2
+    )
 
 # FIXME: This is not consistent with the example below it, but this
 # offset only happens if the colon is at eol, which wouldn't be often.
 # Tokenizing `bar:' as `:bar =>' would be better, but it's hard to
 # distinguish from a variable reference inside a ternary operator.
 foo(bar:
-  tee)
+      tee)
 
 foo(:bar =>
-  tee)
+    tee)
 
 regions = foo(
-              OpenStruct.new(id: 0, name: "foo") => [
-                                                     10
-                                                    ]
-             )
+  OpenStruct.new(id: 0, name: "foo") => [
+    10
+  ]
+)
 
 {'a' => {
-         'b' => 'c',
-         'd' => %w(e f)
-        }
+   'b' => 'c',
+   'd' => %w(e f)
+ }
 }
 
 # Bug#17050
 
 return render json: {
-                     errors: { base: [message] },
-                     copying: copying
-                    },
+                errors: { base: [message] },
+                copying: copying
+              },
               status: 400
 
 top test(
-         some,
-         top,
-         test)
+      some,
+      top,
+      test)
 
 foo bar, {
-          tee: qux
-         }
+      tee: qux
+    }
 
 # Bug#42846, bug#18644
 
@@ -502,7 +521,7 @@ end
 def resolve(**args)
   members = proc do |**args|
     p(**args)
-    end
+  end
 
   member.call(**args)
 end
@@ -510,29 +529,29 @@ end
 # Endless methods.
 class Bar
   def foo(abc) = bar +
-                   baz
+                 baz
 
   def self.bar =
     123 +
-      4
+    4
 
   def foo(...) = z
 
   def request_params = {
-                        headers: request_headers,
-                        body: request_body
-                       }
+    headers: request_headers,
+    body: request_body
+  }
 
   def self.foo(
-               baz,
-               bar
-              ) =
+        baz,
+        bar
+      ) =
     what
 
   def foo=(
-           baz,
-           bar
-          )
+        baz,
+        bar
+      )
     def baz.full_name = "#{bar} 3"
 
     baz
@@ -540,5 +559,9 @@ class Bar
 end
 
 # Local Variables:
+# ruby-after-operator-indent: t
+# ruby-block-indent: t
+# ruby-method-call-indent: t
 # ruby-method-params-indent: t
+# ruby-parenless-call-arguments-indent: t
 # End:
