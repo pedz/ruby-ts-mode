@@ -35,12 +35,12 @@
 
 (require 'ruby-ts-mode)
 
-(defun rtsn-parent (&optional node)
+(defun ruby-ts--parent (&optional node)
   "Return parent of NODE.
 NODE defaults to the node at point."
   (treesit-node-parent (or node (treesit-node-at (point)))))
 
-(defun rtsn-next-sibling (cnt)
+(defun ruby-ts--next-sibling (cnt)
   "Use `treesit-node-next-sibling' CNT times.
 Temporary routine used for experimentation."
   (interactive "p")
@@ -52,7 +52,7 @@ Temporary routine used for experimentation."
         (goto-char (treesit-node-start node))
       (message "no node.  cnt is still %d" cnt))))
 
-(defun rtsn-prev-sibling (cnt)
+(defun ruby-ts--prev-sibling (cnt)
   "Use `treesit-node-prev-sibling' CNT times.
 Temporary routine used for experimentation."
   (interactive "p")
@@ -64,7 +64,7 @@ Temporary routine used for experimentation."
         (goto-char (treesit-node-start node))
       (message "no node.  cnt is still %d" cnt))))
 
-(defun rtsn--raw-next-sibling (cnt)
+(defun ruby-ts--raw-next-sibling (cnt)
   "Find the CNTth child of parent node at `point' starting after `point'."
   (interactive "p")
   (let* ((point (point))
@@ -83,7 +83,7 @@ Temporary routine used for experimentation."
         (goto-char (treesit-node-start child))
       (message "ran out of children"))))
 
-(defun rtsn--raw-prev-sibling (cnt)
+(defun ruby-ts--raw-prev-sibling (cnt)
   "Find the CNTth child of parent node at `point' ending before `point'."
   (interactive "p")
   (let* ((point (point))
@@ -102,7 +102,7 @@ Temporary routine used for experimentation."
         (goto-char (treesit-node-end child))
       (message "ran out of children"))))
 
-(defun rtsn--next-sibling (regexp &optional point)
+(defun ruby-ts--next-sibling (regexp &optional point)
   "Return next sibling.
 Find the closest ancestor node matching REGEXP starting from the
 node at POINT.  Return the first direct child of ancestor
@@ -115,7 +115,7 @@ Optional POINT defaults to `point'."
                 (> (treesit-node-start node) point))
               children)))
 
-(defun rtsn--prev-sibling (regexp &optional point)
+(defun ruby-ts--prev-sibling (regexp &optional point)
   "Return previous sibling.
 Find the closest ancestor node matching REGEXP starting from the node
 at POINT.  Return the last direct child of ancestor ending before
@@ -128,11 +128,11 @@ to `point'."
                 (< (treesit-node-end node) point))
               children)))
 
-(defun rtsn-forward-argument-start (cnt)
+(defun ruby-ts--forward-argument-start (cnt)
   "Move point to the start of the next argument/parameter CNT times."
   (interactive "p")
   (setq cnt (or cnt 1))
-  (let ((dest (rtsn--next-sibling
+  (let ((dest (ruby-ts--next-sibling
                (rx (or "method_parameters" "argument_list" "block_parameters")))))
     (while (and dest (> (setq cnt (1- cnt)) 0))
       (setq dest (treesit-node-next-sibling dest)))
@@ -140,11 +140,11 @@ to `point'."
         (goto-char (treesit-node-start dest))
       (error "Ran out of arguments / parameters"))))
 
-(defun rtsn-forward-statement-start (cnt)
+(defun ruby-ts--forward-statement-start (cnt)
   "Move point to the start of the next argument/parameter CNT times."
   (interactive "p")
   (setq cnt (or cnt 1))
-  (let ((dest (rtsn--next-sibling
+  (let ((dest (ruby-ts--next-sibling
                (rx (or "body_statement" "block_body" "then" "else" "do" "rescue"
                        "ensure")))))
     (while (and dest (> (setq cnt (1- cnt)) 0))
@@ -156,11 +156,11 @@ to `point'."
 ;;; Start of wrapper routines, et. al.
 
 
-(define-error 'rtsn-scan-error
+(define-error 'ruby-ts--scan-error
               "A scan or movement was done that went too far"
               'treesit-error)
 
-(defun rtsn--desired-item-p (node point forward)
+(defun ruby-ts--desired-item-p (node point forward)
   "Return non-nil if the NODE is the desired item.
 The primitive routines take POINT and FORWARD as arguments.
 POINT is where to start the search and FORWARD is non-nil if the
@@ -190,17 +190,17 @@ desired item if movement is forward."
             (>= start point)
           (<= end point)))))
 
-(defun rtsn--treesit-search-forward (start predicate &optional backward all)
-  "Call `treesit-search-forward' and signals `rtsn-scan-error' on nil return.
+(defun ruby-ts--treesit-search-forward (start predicate &optional backward all)
+  "Call `treesit-search-forward' and signals `ruby-ts--scan-error' on nil return.
 See `treesit-search-forward' for description of START PREDICATE BACKWARD ALL."
   (let ((result (treesit-search-forward start predicate backward all)))
     (unless result
-      (signal 'rtsn-scan-error "treesit search failed"))
+      (signal 'ruby-ts--scan-error "treesit search failed"))
     result))
 
-(defun rtsn--wrapper-wrapper (arg interactive func)
+(defun ruby-ts--wrapper-wrapper (arg interactive func)
   "A wrapper for the wrapper functions.
-See `rtsn-mark-method' as an example of how ARG and INTERACTIVE
+See `ruby-ts--mark-method' as an example of how ARG and INTERACTIVE
 are interpreted.  FUNC is called with point and forward ARG times
 with point progressing appropriately on each call.  The retun is
 a list of four elements:
@@ -211,8 +211,8 @@ a list of four elements:
     3rd - forward"
   (if interactive
       (condition-case e
-          (rtsn--wrapper-wrapper arg nil func)
-        (rtsn-scan-error
+          (ruby-ts--wrapper-wrapper arg nil func)
+        (ruby-ts--scan-error
          (message "e: %S" (cdr e))
          (user-error (cdr e))))
 
@@ -245,12 +245,12 @@ a list of four elements:
             used-region-p
             forward))))
 
-(defun rtsn--forward-wrapper (arg interactive func)
+(defun ruby-ts--forward-wrapper (arg interactive func)
   "Wrapper function for moving forward.
-ARG INTERACTIVE FUNC are passed to `rtsn--wrapper-wrapper' which
+ARG INTERACTIVE FUNC are passed to `ruby-ts--wrapper-wrapper' which
 returns a list ( start end used-region-p forward ).  If forward
 is true, point is set to end else start."
-  (let* ((result (rtsn--wrapper-wrapper arg interactive func))
+  (let* ((result (ruby-ts--wrapper-wrapper arg interactive func))
          (start (nth 0 result))
          (end (nth 1 result))
          (forward  (nth 3 result)))
@@ -258,13 +258,13 @@ is true, point is set to end else start."
     (when result
       (goto-char (if forward end start)))))
 
-(defun rtsn--mark-wrapper (arg interactive func)
+(defun ruby-ts--mark-wrapper (arg interactive func)
   "Wrapper function for marking a region.
-ARG INTERACTIVE FUNC are passed to `rtsn--wrapper-wrapper' which
+ARG INTERACTIVE FUNC are passed to `ruby-ts--wrapper-wrapper' which
 returns a list ( start end used-region-p forward ).  Generally
 point is set to start and mark is set to end but not always.  e.g. if
 used-region-p is true and forward is true, only mark is set."
-  (let* ((result (rtsn--wrapper-wrapper arg interactive func))
+  (let* ((result (ruby-ts--wrapper-wrapper arg interactive func))
          (start (nth 0 result))
          (end (nth 1 result))
          (used-region-p (nth 2 result))
@@ -282,11 +282,11 @@ used-region-p is true and forward is true, only mark is set."
       (unless (and used-region-p forward)
         (goto-char start)))))
 
-(defconst rtsn--method-regexp
+(defconst ruby-ts--method-regexp
   (rx string-start (or "method" "singleton_method") string-end)
   "Regular expression for the node type that matches a method.")
 
-(defun rtsn--method (point forward)
+(defun ruby-ts--method (point forward)
   "Return cons ( start of method . end of method ).
 Starting at POINT and moving forward if FORWARD, else backwards, the
 next or previous method is found.
@@ -296,8 +296,8 @@ the white space from the beginning of the line.  End of method
 includes any text from the end of the method to the start of the
 next line."
   (let* ((start-node (treesit-node-at point))
-         (method (rtsn--treesit-search-forward start-node
-                                               rtsn--method-regexp
+         (method (ruby-ts--treesit-search-forward start-node
+                                               ruby-ts--method-regexp
                                                (not forward)))
          (comment method)
          temp start end)
@@ -313,7 +313,7 @@ next line."
       (setq end (point)))
     (cons start end)))
 
-(defconst rtsn--statement-parent-regexp
+(defconst ruby-ts--statement-parent-regexp
   (rx string-start
       (or "program"
           "block_body"
@@ -329,11 +329,11 @@ next line."
       string-end)
   "Regular expression of the nodes that can constain statements.")
 
-(defun rtsn--is-comment (node)
+(defun ruby-ts--is-comment (node)
   "Return t if NODE type is comment."
   (string-match-p "comment" (treesit-node-type node)))
 
-(defun rtsn--statement (point forward)
+(defun ruby-ts--statement (point forward)
   "Return cons ( start of statement . end of statement ).
 Starting at POINT and moving forward if FORWARD, else backwards, the
 next or previous statement is found.
@@ -350,7 +350,7 @@ statement includes up to and including the new line."
   ;;
   ;; So the node at point is found.  Then the parents are found until
   ;; a node that can contain statements is found.  This node's type
-  ;; will match rtsn--statement-parent-regexp.  The immediate child of
+  ;; will match ruby-ts--statement-parent-regexp.  The immediate child of
   ;; this node will be the statement.
   (let* ((statement (treesit-node-at point))
          (parent (treesit-node-parent statement)))
@@ -359,7 +359,7 @@ statement includes up to and including the new line."
     (message "1 parent: %S; statement: %S" parent statement)
     (while (and parent
                 statement
-                (not (string-match-p rtsn--statement-parent-regexp
+                (not (string-match-p ruby-ts--statement-parent-regexp
                                      (treesit-node-type parent))))
       (setq statement parent
             parent (treesit-node-parent parent))
@@ -368,8 +368,8 @@ statement includes up to and including the new line."
 
     ;; Move in proper direction over comments.
     (while (and statement
-                (or (rtsn--is-comment statement)
-                    (not (rtsn--desired-item-p statement point forward))))
+                (or (ruby-ts--is-comment statement)
+                    (not (ruby-ts--desired-item-p statement point forward))))
       (setq statement (if forward
                           (treesit-node-next-sibling statement)
                         (treesit-node-prev-sibling statement)))
@@ -378,23 +378,23 @@ statement includes up to and including the new line."
 
     ;; Error off if we are off in space.
     (unless statement
-      (signal 'rtsn-scan-error "statement not found"))
+      (signal 'ruby-ts--scan-error "statement not found"))
     (cons (treesit-node-start statement) (treesit-node-end statement))))
 
-    ;; (setq lineno (rtsn--lineno statement)
+    ;; (setq lineno (ruby-ts--lineno statement)
     ;;       sibling (treesit-node-prev-sibling statement))
-    ;; (if (rtsn--is-comment sibling)
+    ;; (if (ruby-ts--is-comment sibling)
     ;;     (progn
     ;;       (while (and (setq temp (treesit-node-prev-sibling sibling))
-    ;;                   (rtsn--is-comment temp))
+    ;;                   (ruby-ts--is-comment temp))
     ;;         (setq sibling temp))
     ;;       (setq start (treesit-node-start sibling)))
     ;;   ;;;;  start here tomorrow...
-    ;;   (if (= lineno (rtsn--lineno sibling))
+    ;;   (if (= lineno (ruby-ts--lineno sibling))
     ;;       (setq)))))
 
     
-(defun rtsn-mark-method (&optional arg interactive)
+(defun ruby-ts--mark-method (&optional arg interactive)
   "Put mark at end of this method, point at beginning.
 The method marked is the one that contains point or follows point.
 With positive ARG, mark this and that many next methods; with negative
@@ -406,9 +406,9 @@ the one(s) already marked.
 If INTERACTIVE is non-nil, as it is interactively,
 report errors as appropriate for this kind of usage."
   (interactive "p\nd")
-  (rtsn--mark-wrapper arg interactive #'rtsn--method))
+  (ruby-ts--mark-wrapper arg interactive #'ruby-ts--method))
 
-(defun rtsn-mark-statement (&optional arg interactive)
+(defun ruby-ts--mark-statement (&optional arg interactive)
   "Put mark at end of this statement, point at beginning.
 The statement marked is the one that contains point or follows point.
 With positive ARG, mark this and that many next statements; with negative
@@ -420,15 +420,15 @@ the one(s) already marked.
 If INTERACTIVE is non-nil, as it is interactively,
 report errors as appropriate for this kind of usage."
   (interactive "p\nd")
-  (rtsn--mark-wrapper arg interactive #'rtsn--statement))
+  (ruby-ts--mark-wrapper arg interactive #'ruby-ts--statement))
 
-(defun rtsn-forward-method (&optional arg interactive)
+(defun ruby-ts--forward-method (&optional arg interactive)
   "Move point forward ARG methods.
 Negative ARG moves backwards.
 If INTERACTIVE is non-nil, as it is interactively,
 report errors as appropriate for this kind of usage."
   (interactive "p\nd")
-  (rtsn--forward-wrapper arg interactive #'rtsn--method))
+  (ruby-ts--forward-wrapper arg interactive #'ruby-ts--method))
 
 (provide 'ruby-ts-navigation)
 

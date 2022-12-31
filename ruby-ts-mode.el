@@ -441,7 +441,7 @@ These are currently unused")
       string-end)
   "Regular expression matching methods and singleton methods.")
 
-(defun rtsn--lineno (node)
+(defun ruby-ts--lineno (node)
   "Return line number of NODE's start."
   (line-number-at-pos (treesit-node-start node)))
 
@@ -634,19 +634,19 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 ;;; intended to be used with indent rules
 ;;;
 
-(defun treesit-type-pred (regexp)
+(defun ruby-ts--type-pred (regexp)
   "Return predicate taking a node returning non-nil if REGEXP matches type of node."
   (lambda (node)
     (string-match-p regexp (treesit-node-type node))))
 
-(defun parent-node (&rest _)
+(defun ruby-ts--parent-node (&rest _)
   "Return the parent node matching ident rule."
   (lambda (_n parent &rest _)
     parent))
 
 (declare-function ruby-smie--indent-to-stmt-p "ruby-mode.el" (keyword))
 
-(defun option-ruby-alignable-keywords (pred)
+(defun ruby-ts--align-keywords (pred)
   "Return either start or bol of PRED.
 PRED should specify a node that is listed in
 `ruby-alignable-keywords'.  If PRED is listed in user option
@@ -665,7 +665,7 @@ Otherwise return start of PRED."
               (point))
           temp)))))
 
-(defun bol (pred)
+(defun ruby-ts--bol (pred)
   "Return bol of PRED.
 PRED should take (node parent bol &rest rest) and return a node.
 Returns bol of the current line if PRED returns nil."
@@ -677,26 +677,25 @@ Returns bol of the current line if PRED returns nil."
         (back-to-indentation)
         (point)))))
 
-(defun grand-parent-is (type)
+(defun ruby-ts--grand-parent-is (type)
   "Check grand parent's type matches regexp TYPE."
   (lambda (_n parent &rest _)
     (string-match-p type (treesit-node-type (treesit-node-parent parent)))))
 
-(defun grand-parent-node ()
+(defun ruby-ts--grand-parent-node ()
   "Return grand parent node."
   (lambda (_n parent &rest _)
     (treesit-node-parent parent)))
 
-(defun ancestor-start (type)
+(defun ruby-ts--ancestor-start (type)
   "Return start of closest ancestor matching regexp TYPE."
   (lambda (node &rest _)
-    (treesit-node-start (treesit-parent-until node (treesit-type-pred type)))))
+    (treesit-node-start (treesit-parent-until node (ruby-ts--type-pred type)))))
 
-(defun ancestor-is (type)
+(defun ruby-ts--ancestor-is (type)
   "Check that ancestor's type matches regexp TYPE."
   (lambda (node &rest _)
-    ;; (message "ancestor-is node: %S" node)
-    (treesit-parent-until node (treesit-type-pred type))))
+    (treesit-parent-until node (ruby-ts--type-pred type))))
 
 (defun ruby-ts-mode--align-call ()
   "Align chained method calls.
@@ -715,7 +714,7 @@ See `ruby-align-chained-calls' for details."
           (treesit-node-start temp))
       (+ (treesit-node-start parent) ruby-ts-mode-indent-offset))))
 
-(defun do-ruby-align-chained-calls ()
+(defun ruby-ts--align-chain-calls ()
   "To Be Documented"
   (lambda (node parent &rest _)
     (and ruby-align-chained-calls
@@ -753,7 +752,7 @@ def foo(
            (first-arg (treesit-node-child parent 0 t))
            (from-name (eq t ruby-method-params-indent)))
       ;; first arg on same line as def
-      (if (= (rtsn--lineno method) (rtsn--lineno first-arg))
+      (if (= (ruby-ts--lineno method) (ruby-ts--lineno first-arg))
           (let* ((node-type (treesit-node-type node))
                  (paren (treesit-node-child parent 0)))
             ;; if there is a closing ) there must be an opening (
@@ -772,7 +771,7 @@ def foo(
           (+ (treesit-node-start method)
              (or ruby-method-params-indent 0)))))))
 
-(defalias 'ancestor-node #'ancestor-is
+(defalias 'ancestor-node #'ruby-ts--ancestor-is
   "Return ancestor node whose type matches regexp TYPE.")
 
 (defun ruby-ts-mode--right-justify-array-leaf ( node parent &rest _)
@@ -822,18 +821,18 @@ def foo(
            ;; Old code -- need to figure out where / when this was used.
            ;;
            ;; ,@(when ruby-ts-mode-call-block
-           ;;     '(((n-p-gp "end" "do_block" "call") (bol (grand-parent-node)) 0)
-           ;;       ((n-p-gp nil "do_block" "call") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+           ;;     '(((n-p-gp "end" "do_block" "call") (ruby-ts--bol (ruby-ts--grand-parent-node)) 0)
+           ;;       ((n-p-gp nil "do_block" "call") (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
            ;;       ((parent-is "body_statement") first-sibling 0)))
            ;; ((node-is "body_statement") parent-bol ruby-ts-mode-indent-offset)
-           ;; ((parent-is "body_statement") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+           ;; ((parent-is "body_statement") (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
            ;; ((match "end" "do_block") parent-bol 0)
 
            ;; ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
-           ;; ((n-p-gp nil "block_body" "block") (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
-           ;; ((match "}" "block") (bol (grand-parent-node)) 0)
+           ;; ((n-p-gp nil "block_body" "block") (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+           ;; ((match "}" "block") (ruby-ts--bol (ruby-ts--grand-parent-node)) 0)
 
-           ;; Old code before option-ruby-alignable-keywords
+           ;; Old code before ruby-ts--align-keywords
            ;; "while" and "until" have a "do" child that have
            ;; statements as their children.
            ;; ((n-p-gp "end" "do" "while") grand-parent 0)
@@ -843,7 +842,7 @@ def foo(
            ;; ((node-is "end") parent 0)
            ;; ((node-is "end") parent-bol 0)
 
-           ;; old code before option-ruby-alignable-keywords
+           ;; old code before ruby-ts--align-keywords
            ;; ((parent-is "begin") parent ruby-ts-mode-indent-offset)
 
            ;; I want to redo this as well so lets just remove it for now.
@@ -855,8 +854,8 @@ def foo(
            ;; I need to come back and revisit this after the tests are working.
            ;;
            ;; ,@(when ruby-ts-mode-indent-split-exp-by-term
-           ;;     '(((ancestor-is "parenthesized_statements") (ancestor-start "parenthesized_statements") 1)
-           ;;       ((ancestor-is "assignment") (ancestor-start "assignment") ruby-ts-mode-indent-offset)))
+           ;;     '(((ruby-ts--ancestor-is "parenthesized_statements") (ruby-ts--ancestor-start "parenthesized_statements") 1)
+           ;;       ((ruby-ts--ancestor-is "assignment") (ruby-ts--ancestor-start "assignment") ruby-ts-mode-indent-offset)))
 
            ;; "when" list spread across multiple lines
            ;; old code...
@@ -896,13 +895,13 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; I'm using very restrictive patterns hoping to reduce rules
            ;;triggering unintentionally.
            ((match "else" "if")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((match "elsif" "if")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((match "end" "if")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((n-p-gp nil "then\\|else\\|elsif" "if\\|unless")
-            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
 
            ;; case expression: when, in_clause, and else are all
            ;; children of case.  when and in_clause have pattern and
@@ -910,13 +909,13 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; i.e. the statements are not children of when but then.
            ;; But for the statements are children of else.
            ((match "when" "case")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((match "in_clause" "case")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((match "else" "case")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((match "end" "case")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((n-p-gp nil "then" "when") grand-parent ruby-ts-mode-indent-offset)
            ((n-p-gp nil "then" "in_clause") grand-parent ruby-ts-mode-indent-offset)
            ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
@@ -925,9 +924,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; while / until have only "do" as a child.  The "end" is a
            ;; child of "do".
            ((n-p-gp "end" "do" "while\\|until")
-            (option-ruby-alignable-keywords (grand-parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) 0)
            ((n-p-gp nil "do" "while\\|until")
-            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
             
            ;; begin can have rescue, ensure, else, and end.
            ;; statements are a child of begin.  rescue, ensure, else,
@@ -935,22 +934,22 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; as a child thus statements will be grand children of
            ;; rescue.
            ((n-p-gp nil "then" "rescue")
-            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
            ((n-p-gp nil "ensure\\|else" "begin")
-            (option-ruby-alignable-keywords (parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) ruby-ts-mode-indent-offset)
            ((match "rescue\\|ensure\\|else\\|end" "begin")
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((parent-is "begin")         ;last
-            (option-ruby-alignable-keywords (parent-node)) ruby-ts-mode-indent-offset)            
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) ruby-ts-mode-indent-offset)            
 
            ;; for ... I don't think I have ever used a for loop in
            ;; Ruby.  The "in" (not an in_clause) and "do" are
            ;; children.  The statements are children of the "do".
            ;; And, of course, the "end" is a child of the "do".
            ((n-p-gp "end" "do" "for")
-            (option-ruby-alignable-keywords (grand-parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) 0)
            ((n-p-gp nil "do" "for")
-            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
 
            ;; method has a "body_statement" and the "end" as children.
            ;; The body_statement can have rescue, ensure, and else as
@@ -958,16 +957,16 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; body_statement hits the node as "body_statement" and not
            ;; as the assignment, etc.
            ((match "end" ,ruby-ts-mode--method-regex)
-            (option-ruby-alignable-keywords (parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) 0)
            ((n-p-gp "\\`\\(rescue\\|ensure\\|else\\)\\'" "body_statement" ,ruby-ts-mode--method-regex)
-            (option-ruby-alignable-keywords (grand-parent-node)) 0)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) 0)
            ((n-p-gp nil "rescue\\|ensure\\|else" "body_statement") parent ruby-ts-mode-indent-offset)
            ((match "body_statement" ,ruby-ts-mode--method-regex) ;first statement
-            (option-ruby-alignable-keywords (parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords (ruby-ts--parent-node)) ruby-ts-mode-indent-offset)
            ((n-p-gp nil "body_statement" ,ruby-ts-mode--method-regex) ;other statements
-            (option-ruby-alignable-keywords (grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
 
-           ;; ((do-ruby-align-chained-calls) parent ruby-ts-mode-indent-offset)
+           ;; ((ruby-ts--align-chain-calls) parent ruby-ts-mode-indent-offset)
            ((match "\\." "call") (ruby-ts-mode--align-call) 0)
 
            ;; ruby-indent-after-block-in-continued-expression
@@ -1002,7 +1001,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; If the previous method isn't finished yet, this will get
            ;; the next method indented properly.
            ((n-p-gp ,ruby-ts-mode--method-regex "body_statement" ,ruby-ts-mode--class-or-module-regex)
-            (bol (grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
 
            ;; Match the end of a class / modlue
            ((match "end" ,ruby-ts-mode--class-or-module-regex) parent 0)
@@ -1069,7 +1068,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
              ('base (alist-get 'base (ruby-ts-mode--indent-styles language)))))))
     `((,language ,@style))))
 
-(defun rtsm--arrow-up-start (arg)
+(defun ruby-ts--arrow-up-start (arg)
   "Move to the start ARG levels up or out."
   (interactive "p")
   (setq arg (or arg 1))
@@ -1123,7 +1122,7 @@ The hash (#) is for instance methods only which are methods
 dot (.) is used.  Double colon (::) is used between classes.  The
 leading double colon is not added."
   (let* ((node (treesit-node-at (point)))
-         (method (treesit-parent-until node (treesit-type-pred ruby-ts-mode--method-regex)))
+         (method (treesit-parent-until node (ruby-ts--type-pred ruby-ts-mode--method-regex)))
          (class (or method node))
          (result nil)
          (sep "#")
@@ -1136,7 +1135,7 @@ leading double colon is not added."
       (unless (= 1 (length method-list))
         (setq sep ".")))
     (while (setq class (treesit-parent-until class
-                                             (treesit-type-pred
+                                             (ruby-ts--type-pred
                                               ruby-ts-mode--class-or-module-regex)))
       (setq class-list (append (ruby-ts-mode--class-name class) class-list)))
     (message "class-list: %S method-list:%S" class-list method-list)
@@ -1163,19 +1162,19 @@ leading double colon is not added."
 
 (defvar-keymap ruby-ts-mode--arrow-keys
   :doc "Transient keymap for arrow keys"
-  ;; "<right>" #'rtsn-forward-argument-start
-  "<right>" #'rtsn-forward-statement-start
-  "<up>"    #'rtsm--arrow-up-start
+  ;; "<right>" #'ruby-ts-forward-argument-start
+  "<right>" #'ruby-ts--forward-statement-start
+  "<up>"    #'ruby-ts--arrow-up-start
   )
   
 (defvar-keymap ruby-ts-mode-map
   :doc "Keymap used in Ruby mode"
   :parent prog-mode-map
-  "C-M-h"     #'rtsn-mark-method
-  "H-<right>"  #'rtsn-mark-statement
-  "s-<right>"  #'rtsn-forward-method
-  "M-<left>"  #'rtsn--raw-prev-sibling
-  "M-<right>" #'rtsn--raw-next-sibling
+  "C-M-h"     #'ruby-ts--mark-method
+  "H-<right>"  #'ruby-ts--mark-statement
+  "s-<right>"  #'ruby-ts--forward-method
+  "M-<left>"  #'ruby-ts--raw-prev-sibling
+  "M-<right>" #'ruby-ts--raw-next-sibling
   "C-c" ruby-ts-mode--arrow-keys)
 
 (define-derived-mode ruby-ts-base-mode prog-mode "Ruby"

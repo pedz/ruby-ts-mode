@@ -27,6 +27,8 @@
 (require 'ruby-ts-mode)
 
 (defconst testing-ruby-mode nil)
+(defvar font-lock-operator-face		'font-lock-operator-face
+  "Face name to use for strings.")
 
 (defmacro ruby-with-temp-buffer (contents &rest body)
   (declare (indent 1) (debug t))
@@ -89,10 +91,11 @@ VALUES-PLIST is a list with alternating index and value elements."
   (ruby-assert-state "foo <<asd\n" 3 ?\n)
   (ruby-assert-state "class <<asd\n" 3 nil))
 
+;; Modified the 2nd test from nil to font-lock-operator-face
 (ert-deftest ruby-heredoc-font-lock ()
   (let ((s "foo <<eos.gsub('^ *', '')"))
     (ruby-assert-face s 9 font-lock-string-face)
-    (ruby-assert-face s 10 nil)))
+    (ruby-assert-face s 10 font-lock-operator-face)))
 
 (ert-deftest ruby-singleton-class-no-heredoc-font-lock ()
   (ruby-assert-face "class<<a" 8 nil))
@@ -125,6 +128,7 @@ VALUES-PLIST is a list with alternating index and value elements."
   (ruby-assert-face "exit!" 5 font-lock-builtin-face))
 
 (ert-deftest ruby-deep-indent ()
+  (skip-unless testing-ruby-mode)
   (let ((ruby-deep-arglist nil)
         (ruby-deep-indent-paren '(?\( ?\{ ?\[ ?\] t)))
     (ruby-should-indent "foo = [1,\n2" 7)

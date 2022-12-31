@@ -27,7 +27,7 @@
 
 ;;; Code:
 
-(defun rtsn-node-to-string (node &optional point)
+(defun ruby-ts--node-to-string (node &optional point)
   "Return a pretty string describing NODE.
 Optional POINT defaults to `point'."
   (setq point (or point (point)))
@@ -42,7 +42,7 @@ Optional POINT defaults to `point'."
                      ("%d-%d)")))
             type start end)))
 
-(defun rtsn-node-list-to-string (list &optional point)
+(defun ruby-ts--node-list-to-string (list &optional point)
   "Return a pretty string describing a LIST of nodes.
 Optional POINT defaults to `point'."
   (setq point (or point (point)))
@@ -53,12 +53,12 @@ Optional POINT defaults to `point'."
                                      (< point (treesit-node-start node)))
                                 " . "
                               " "))
-                        (result (concat sep (rtsn-node-to-string node point))))
+                        (result (concat sep (ruby-ts--node-to-string node point))))
                    (setq past-point (< point (treesit-node-end node)))
                    result))
                list)))
 
-(defun rtsn-print (cnt)
+(defun ruby-ts--print (cnt)
   "Move CNT times up the tree and then print node and its list of children.
 CNT is prefix arg and defaults to 0."
   (interactive "P")
@@ -71,7 +71,7 @@ CNT is prefix arg and defaults to 0."
     (if (not node)
         (message "Ran out of parents")
       (message "(%s (%s))" type
-               (rtsn-node-list-to-string (treesit-node-children node))))))
+               (ruby-ts--node-list-to-string (treesit-node-children node))))))
 
 (provide 'ruby-ts-print)
 

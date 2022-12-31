@@ -2,7 +2,7 @@
 ;;; Four routines that I don't think are going to do what I want.
 ;;;
 
-(defun rtsm--forward-end (node &optional cnt)
+(defun ruby-ts--forward-end (node &optional cnt)
   "Move forward to the end of matching regexp NODE.
 If already at the end, move to the next sibling and repeat the search.
 Repeat CNT times."
@@ -22,7 +22,7 @@ Repeat CNT times."
         (goto-char (treesit-node-end found))
       (error "Movement to %s failed" node))))
 
-(defun rtsm--forward-start (node &optional cnt)
+(defun ruby-ts--forward-start (node &optional cnt)
   "Move forward to the start of matching regexp NODE.
 If already at the start, move to the next sibling and repeat the search.
 Repeat CNT times."
@@ -42,7 +42,7 @@ Repeat CNT times."
         (goto-char (treesit-node-start found))
       (error "Movement to %s failed" node))))
 
-(defun rtsm--backward-end (node &optional cnt)
+(defun ruby-ts--backward-end (node &optional cnt)
   "Move backward to the end of matching regexp NODE.
 If already at the end, move to the next sibling and repeat the search.
 Repeat CNT times."
@@ -62,7 +62,7 @@ Repeat CNT times."
         (goto-char (treesit-node-end found))
       (error "Movement to %s failed" node))))
 
-(defun rtsm--backward-start (node &optional cnt)
+(defun ruby-ts--backward-start (node &optional cnt)
   "Move backward to the start of matching regexp NODE.
 If already at the start, move to the next sibling and repeat the search.
 Repeat CNT times."
@@ -87,7 +87,7 @@ Repeat CNT times."
 ;;;  four previous routines semi-automagically.
 ;;;
 
-(defun rtsm--arrow (dir &optional end)
+(defun ruby-ts--arrow (dir &optional end)
   "Return a function that takes ARG which move in DIR direction.
 
 DIR can be:
@@ -121,143 +121,143 @@ repeat count."
 
 ;;;
 ;;;  This is another set of routines, etc that isn't working out as
-;;;  desired.  The comments in rtsm--arrow-forward-start and
-;;;  rtsm--arrow-forward-end should provide insight into my thoughts.
+;;;  desired.  The comments in ruby-ts--arrow-forward-start and
+;;;  ruby-ts--arrow-forward-end should provide insight into my thoughts.
 ;;;
 
-(rx-define rtsm--peer-nonlocal-variable-rx
+(rx-define ruby-ts--peer-nonlocal-variable-rx
   (| "instance_variable" "class_variable" "global_variable"))
-(defconst rtsm--peer-nonlocal-variable (rx rtsm--peer-nonlocal-variable-rx)
+(defconst ruby-ts--peer-nonlocal-variable (rx ruby-ts--peer-nonlocal-variable-rx)
   "Peer choices for nonlocal_variable.")
 
-(rx-define rtsm--peer-variable-rx
-  (| "constant" "identifier" "self" "super" rtsm--peer-nonlocal-variable-rx))
-(defconst rtsm--peer-variable (rx rtsm--peer-variable-rx)
+(rx-define ruby-ts--peer-variable-rx
+  (| "constant" "identifier" "self" "super" ruby-ts--peer-nonlocal-variable-rx))
+(defconst ruby-ts--peer-variable (rx ruby-ts--peer-variable-rx)
   "Peer choices for lhs.")
 
-(rx-define rtsm--peer-lhs-rx
-  (| "call" "element_reference" "false" "nil" "scope_resolution" "true" rtsm--peer-variable-rx))
-(defconst rtsm--peer-lhs (rx rtsm--peer-lhs-rx)
+(rx-define ruby-ts--peer-lhs-rx
+  (| "call" "element_reference" "false" "nil" "scope_resolution" "true" ruby-ts--peer-variable-rx))
+(defconst ruby-ts--peer-lhs (rx ruby-ts--peer-lhs-rx)
   "Peer choices for lhs.")
 
-(rx-define rtsm--peer-simple-numeric-rx
+(rx-define ruby-ts--peer-simple-numeric-rx
   (| "integer" "float" "complex" "rational"))
-(defconst rtsm--peer-simple-numeric (rx rtsm--peer-simple-numeric-rx)
+(defconst ruby-ts--peer-simple-numeric (rx ruby-ts--peer-simple-numeric-rx)
   "Peer choices for simple numeric.")
 
-(rx-define rtsm--peer-numeric-rx
-  (| "unary" rtsm--peer-simple-numeric-rx))
-(defconst rtsm--peer-numeric (rx rtsm--peer-numeric-rx)
+(rx-define ruby-ts--peer-numeric-rx
+  (| "unary" ruby-ts--peer-simple-numeric-rx))
+(defconst ruby-ts--peer-numeric (rx ruby-ts--peer-numeric-rx)
   "Peer choices for numeric.")
 
-(rx-define rtsm--peer-literal-rx
-  (| "simple_symbol" "delimited_symbol" rtsm--peer-numeric-rx))
-(defconst rtsm--peer-literal (rx rtsm--peer-literal-rx)
+(rx-define ruby-ts--peer-literal-rx
+  (| "simple_symbol" "delimited_symbol" ruby-ts--peer-numeric-rx))
+(defconst ruby-ts--peer-literal (rx ruby-ts--peer-literal-rx)
   "Peer choices for literal.")
 
-(rx-define rtsm--peer-primary-rx
+(rx-define ruby-ts--peer-primary-rx
   (| "array" "begin" "break" "call" "case" "case_match"
      "chained_string" "character" "class" "for" "hash"
      "heredoc_beginning" "if" "lambda" "method" "module" "next"
      "parenthesized_statements" "redo" "regex" "retry" "return"
      "singleton_class" "singleton_method" "string" "string_array"
      "subshell" "symbol_array" "unary" "unless" "until" "while"
-     "yield" rtsm--peer-lhs-rx rtsm--peer-literal-rx))
-(defconst rtsm--peer-primary (rx rtsm--peer-primary-rx)
+     "yield" ruby-ts--peer-lhs-rx ruby-ts--peer-literal-rx))
+(defconst ruby-ts--peer-primary (rx ruby-ts--peer-primary-rx)
   "Peer choices for primary.")
 
-(rx-define rtsm--peer-arg-rx
+(rx-define ruby-ts--peer-arg-rx
   (| "assignment" "binary" "conditional" "operator_assignment" "range"
-     "unary" rtsm--peer-primary-rx))
-(defconst rtsm--peer-arg (rx rtsm--peer-arg-rx)
+     "unary" ruby-ts--peer-primary-rx))
+(defconst ruby-ts--peer-arg (rx ruby-ts--peer-arg-rx)
   "Peer choides for arg.")
 
-(rx-define rtsm--peer-expression-rx
+(rx-define ruby-ts--peer-expression-rx
   (| "assignment" "binary" "break" "call" "next" "operator_assignment"
-     "return" "unary" "yield" rtsm--peer-arg-rx))
-(defconst rtsm--peer-expression (rx rtsm--peer-expression-rx)
+     "return" "unary" "yield" ruby-ts--peer-arg-rx))
+(defconst ruby-ts--peer-expression (rx ruby-ts--peer-expression-rx)
   "Peer choices for expression.")
 
-(rx-define rtsm--peer-statement-rx
+(rx-define ruby-ts--peer-statement-rx
   (| "undef" "alias" "if_modifier" "unless_modifier" "while_modifier"
      "until_modifier" "rescue_modifier" "begin_block" "end_block"
-     rtsm--peer-expression-rx))
-(defconst rtsm--peer-statement (rx rtsm--peer-statement-rx)
+     ruby-ts--peer-expression-rx))
+(defconst ruby-ts--peer-statement (rx ruby-ts--peer-statement-rx)
   "Peer choices for  statement.")
 
-(rx-define rtsm--peer-formal-parameter-rx
+(rx-define ruby-ts--peer-formal-parameter-rx
   (| "block_parameter" "destructured_parameter" "forward_parameter"
      "hash_splat_nil" "hash_splat_parameter" "identifier"
      "keyword_parameter" "optional_parameter" "splat_parameter"))
-(defconst rtsm--peer-formal-parameter (rx rtsm--peer-formal-parameter-rx)
+(defconst ruby-ts--peer-formal-parameter (rx ruby-ts--peer-formal-parameter-rx)
   "Peer choices for formal parameters.")
 
-(rx-define rtsm--peer-keyword-variable-rx
+(rx-define ruby-ts--peer-keyword-variable-rx
   (| "nil" "self" "true" "false" "line" "file" "encoding"))
-(defconst rtsm--peer-keyword-variable (rx rtsm--peer-keyword-variable-rx)
+(defconst ruby-ts--peer-keyword-variable (rx ruby-ts--peer-keyword-variable-rx)
   "Peer choices for keyword variable.")
 
-(rx-define rtsm--peer-pattern-literal-rx
+(rx-define ruby-ts--peer-pattern-literal-rx
   (| "heredoc_beginning" "regex" "string" "string_array" "subshell"
-     "symbol_array" rtsm--peer-keyword-variable-rx rtsm--peer-literal-rx))
-(defconst rtsm--peer-pattern-literal (rx rtsm--peer-pattern-literal-rx)
+     "symbol_array" ruby-ts--peer-keyword-variable-rx ruby-ts--peer-literal-rx))
+(defconst ruby-ts--peer-pattern-literal (rx ruby-ts--peer-pattern-literal-rx)
   "Peer choices for pattern literal.")
 
-(rx-define rtsm--peer-pattern-primitive-rx
-  (| "lambda" rtsm--peer-pattern-literal-rx))
-(defconst rtsm--peer-pattern-primitive (rx rtsm--peer-pattern-primitive-rx)
+(rx-define ruby-ts--peer-pattern-primitive-rx
+  (| "lambda" ruby-ts--peer-pattern-literal-rx))
+(defconst ruby-ts--peer-pattern-primitive (rx ruby-ts--peer-pattern-primitive-rx)
   "Peer choices for pattern primitive.")
 
-(rx-define rtsm--peer-pattern-constant-rx
+(rx-define ruby-ts--peer-pattern-constant-rx
   (| "constant" "scope_resolution"))
-(defconst rtsm--peer-pattern-constant (rx rtsm--peer-pattern-constant-rx)
+(defconst ruby-ts--peer-pattern-constant (rx ruby-ts--peer-pattern-constant-rx)
   "Peer choices for pattern constant.")
 
-(rx-define rtsm--peer-pattern-value-rx
+(rx-define ruby-ts--peer-pattern-value-rx
   (| "range" "variable_reference_pattern"
-     "expression_reference_pattern" rtsm--peer-pattern-primitive-rx
-     rtsm--peer-pattern-constant-rx))
-(defconst rtsm--peer-pattern-value (rx rtsm--peer-pattern-value-rx)
+     "expression_reference_pattern" ruby-ts--peer-pattern-primitive-rx
+     ruby-ts--peer-pattern-constant-rx))
+(defconst ruby-ts--peer-pattern-value (rx ruby-ts--peer-pattern-value-rx)
   "Peer choices for pattern value.")
 
-(rx-define rtsm--peer-pattern-expr-basic-rx
+(rx-define ruby-ts--peer-pattern-expr-basic-rx
   (| "identifier" "array_pattern" "find_pattern" "hash_pattern"
-     "parenthesized_pattern" rtsm--peer-pattern-value-rx))
-(defconst rtsm--peer-pattern-expr-basic (rx rtsm--peer-pattern-expr-basic-rx)
+     "parenthesized_pattern" ruby-ts--peer-pattern-value-rx))
+(defconst ruby-ts--peer-pattern-expr-basic (rx ruby-ts--peer-pattern-expr-basic-rx)
   "Peer choices for pattern expr basic.")
 
-(rx-define rtsm--peer-pattern-expr-alt-rx
-  (| "alternative_pattern" rtsm--peer-pattern-expr-basic-rx))
-(defconst rtsm--peer-pattern-expr-alt (rx rtsm--peer-pattern-expr-alt-rx)
+(rx-define ruby-ts--peer-pattern-expr-alt-rx
+  (| "alternative_pattern" ruby-ts--peer-pattern-expr-basic-rx))
+(defconst ruby-ts--peer-pattern-expr-alt (rx ruby-ts--peer-pattern-expr-alt-rx)
   "Peer choices for pattern expr alt.")
 
-(rx-define rtsm--peer-pattern-expr-rx
-  (| "as_pattern" rtsm--peer-pattern-expr-alt-rx))
-(defconst rtsm--peer-pattern-expr (rx rtsm--peer-pattern-expr-rx)
+(rx-define ruby-ts--peer-pattern-expr-rx
+  (| "as_pattern" ruby-ts--peer-pattern-expr-alt-rx))
+(defconst ruby-ts--peer-pattern-expr (rx ruby-ts--peer-pattern-expr-rx)
   "Peer choices for pattern expr.")
 
-(rx-define rtsm--peer-pattern-top-expr-body-rx
-  (| "array_pattern" "find_pattern" "hash_pattern" rtsm--peer-pattern-expr-rx))
-(defconst rtsm--peer-pattern-top-expr-body (rx rtsm--peer-pattern-top-expr-body-rx)
+(rx-define ruby-ts--peer-pattern-top-expr-body-rx
+  (| "array_pattern" "find_pattern" "hash_pattern" ruby-ts--peer-pattern-expr-rx))
+(defconst ruby-ts--peer-pattern-top-expr-body (rx ruby-ts--peer-pattern-top-expr-body-rx)
   "Peer choices for pattern top expr body.")
 
-(rx-define rtsm--peer-if-then-else-rx
+(rx-define ruby-ts--peer-if-then-else-rx
   (| "if" "then" "else" "elsif"))
-(defconst rtsm--peer-if-then-else (rx rtsm--peer-if-then-else-rx)
+(defconst ruby-ts--peer-if-then-else (rx ruby-ts--peer-if-then-else-rx)
   "Peer choices for if then else.")
 
-(rx-define rtsm--peer-body-rescue-etc-rx
+(rx-define ruby-ts--peer-body-rescue-etc-rx
   (| "begin" "rescue" "ensure" "else"))
-(defconst rtsm--peer-body-rescue-etc (rx rtsm--peer-body-rescue-etc-rx)
+(defconst ruby-ts--peer-body-rescue-etc (rx ruby-ts--peer-body-rescue-etc-rx)
   "Peer choices for body rescue etc.")
 
-(rx-define rtsm--peer-argument-rx
+(rx-define ruby-ts--peer-argument-rx
   (| "splat_argument" "hash_splat_argument" "forward_argument"
-     "block_argument" "pair" rtsm--peer-expression-rx))
-(defconst rtsm--peer-argument (rx rtsm--peer-argument-rx)
+     "block_argument" "pair" ruby-ts--peer-expression-rx))
+(defconst ruby-ts--peer-argument (rx ruby-ts--peer-argument-rx)
   "Peer choices for argument.")
 
-(defconst rtsm--peer-groups
+(defconst ruby-ts--peer-groups
   (list "argument_list" "bare_parameters" "block" "block_body"
         "block_parameters" "body_statement" "break_command"
         "command_argument_list" "command_assignment" "command_binary"
@@ -274,52 +274,52 @@ repeat count."
         "rest_assignment" "return_command" "right_assignment_list"
         "rules" "setter" "superclass" "supertypes" "unary_literal"
         "uninterpreted" "unless_guard" "when" "word" "yield_command"
-        rtsm--peer-statement rtsm--peer-argument rtsm--peer-expression
-        rtsm--peer-arg rtsm--peer-primary
-        rtsm--peer-pattern-top-expr-body rtsm--peer-pattern-expr
-        rtsm--peer-pattern-expr-alt rtsm--peer-pattern-expr-basic
-        rtsm--peer-pattern-value rtsm--peer-pattern-primitive
-        rtsm--peer-pattern-literal rtsm--peer-lhs
-        rtsm--peer-formal-parameter rtsm--peer-variable
-        rtsm--peer-literal rtsm--peer-keyword-variable
-        rtsm--peer-numeric rtsm--peer-nonlocal-variable
-        rtsm--peer-body-rescue-etc rtsm--peer-simple-numeric
-        rtsm--peer-pattern-constant rtsm--peer-if-then-else)
+        ruby-ts--peer-statement ruby-ts--peer-argument ruby-ts--peer-expression
+        ruby-ts--peer-arg ruby-ts--peer-primary
+        ruby-ts--peer-pattern-top-expr-body ruby-ts--peer-pattern-expr
+        ruby-ts--peer-pattern-expr-alt ruby-ts--peer-pattern-expr-basic
+        ruby-ts--peer-pattern-value ruby-ts--peer-pattern-primitive
+        ruby-ts--peer-pattern-literal ruby-ts--peer-lhs
+        ruby-ts--peer-formal-parameter ruby-ts--peer-variable
+        ruby-ts--peer-literal ruby-ts--peer-keyword-variable
+        ruby-ts--peer-numeric ruby-ts--peer-nonlocal-variable
+        ruby-ts--peer-body-rescue-etc ruby-ts--peer-simple-numeric
+        ruby-ts--peer-pattern-constant ruby-ts--peer-if-then-else)
   "Lexical peer group regular expressions.")
 
-(defun rtsm--find-peer-regexp (list node-type)
+(defun ruby-ts--find-peer-regexp (list node-type)
   "Return the matching regexp NODE-TYPE from LIST."
   (if list
       (let ((regexp (concat "\\`\\(?:" (car list) "\\)\\'")))
         (if (string-match-p regexp node-type)
             regexp
-          (rtsm--find-peer-regexp (cdr list) node-type)))))
+          (ruby-ts--find-peer-regexp (cdr list) node-type)))))
 
-(defconst rtsm--highest-at-exclusiom-list
+(defconst ruby-ts--highest-at-exclusiom-list
   (list "body_statement")
   "These constructs are too far up the tree.")
 
-(defun rtsm--highest-at-start (node pos)
+(defun ruby-ts--highest-at-start (node pos)
   "Find highest ancestor of NODE starting at POS."
   (let* ((parent (treesit-node-parent node))
          (start (treesit-node-start parent)))
     (if (and (= start pos)
-             (not (member (treesit-node-type parent) rtsm--highest-at-exclusiom-list))
+             (not (member (treesit-node-type parent) ruby-ts--highest-at-exclusiom-list))
              (message "node: %S; parent: %S" node parent))
-        (rtsm--highest-at-start parent pos)
+        (ruby-ts--highest-at-start parent pos)
       node)))
 
-(defun rtsm--highest-at-end (node pos)
+(defun ruby-ts--highest-at-end (node pos)
   "Find highest ancestor of NODE ending at POS."
   (let* ((parent (treesit-node-parent node))
          (end (treesit-node-end parent)))
     (if (and (= end pos)
-             (not (member (treesit-node-type parent) rtsm--highest-at-exclusiom-list))
+             (not (member (treesit-node-type parent) ruby-ts--highest-at-exclusiom-list))
              (message "node: %S; parent: %S" node parent))
-        (rtsm--highest-at-end parent pos)
+        (ruby-ts--highest-at-end parent pos)
       node)))
 
-(defun rtsm--arrow-forward-start (arg)
+(defun ruby-ts--arrow-forward-start (arg)
   "Move to the start ARG peer nodes forward.
 ARG is the prefix argument.  Negative ARG isn't supported (yet).
 
@@ -334,7 +334,7 @@ If node-type is nil
   Find highest node starting at point (ancestor)
   The type of ancstor is found: (node-type)
 
-`rtsm--peer-groups' is searched until a regexp matches
+`ruby-ts--peer-groups' is searched until a regexp matches
   node-type: (peer-regexp)
 
 Starting with dest equal to ancestor, `treesit-search-forward' is
@@ -356,10 +356,10 @@ goto start of dest."
       (setq arg (1+ arg)
             node-type (treesit-node-type node)))
     (unless node-type
-      (setq node (rtsm--highest-at-start node start)
+      (setq node (ruby-ts--highest-at-start node start)
             node-type (treesit-node-type node)))
     (setq peer-regexp
-          (or (rtsm--find-peer-regexp rtsm--peer-groups node-type) "."))
+          (or (ruby-ts--find-peer-regexp ruby-ts--peer-groups node-type) "."))
     (message "node-type: %s; peer-regexp: %s" node-type peer-regexp)
     (while (> arg 0)
       (if (setq temp-node (treesit-search-forward node peer-regexp))
@@ -371,7 +371,7 @@ goto start of dest."
     (setq start (treesit-node-start node))
     (goto-char start)))
 
-(defun rtsm--arrow-forward-end (arg)
+(defun ruby-ts--arrow-forward-end (arg)
   "Move to the end ARG peer nodes forward.
 ARG is the prefix argument.  Negative ARG isn't supported (yet).
 
@@ -389,7 +389,7 @@ Else
     Find highest node ending at point (ancestor)
     The type of ancstor is found: (node-type)
 
-  `rtsm--peer-groups' is searched until a regexp matches
+  `ruby-ts--peer-groups' is searched until a regexp matches
     node-type: (peer-regexp)
 
   Starting with dest equal to node, `treesit-search-forward' is
@@ -413,10 +413,10 @@ Else
     (if (< arg 1)
         (goto-char end)
       (unless node-type
-        (setq node (rtsm--highest-at-end node end)
+        (setq node (ruby-ts--highest-at-end node end)
               node-type (treesit-node-type node)))
       (setq peer-regexp
-            (or (rtsm--find-peer-regexp rtsm--peer-groups node-type) "."))
+            (or (ruby-ts--find-peer-regexp ruby-ts--peer-groups node-type) "."))
       (message "node-type: %s; peer-regexp: %s" node-type peer-regexp)
       (while (> arg 0)
         (if (setq temp-node (treesit-search-forward node peer-regexp))
@@ -429,7 +429,7 @@ Else
     (goto-char end)))
 
 ;; Changed this to using wrapper routines...
-(defun rtsn-mark-method (&optional arg interactive)
+(defun ruby-ts--mark-method (&optional arg interactive)
   "Put mark at end of this method, point at beginning.
 The method marked is the one that contains point or follows point.
 With positive ARG, mark this and that many next methods; with negative
@@ -443,13 +443,13 @@ report errors as appropriate for this kind of usage."
   (interactive "p\nd")
   (if interactive
       (condition-case e
-          (rtsn-mark-method arg nil)
+          (ruby-ts--mark-method arg nil)
         (scan-error (user-error (cadr e))))
     (let* ((used-region-p (use-region-p))
-           (forward (and (>= arg 0) (not (eq last-command 'rtsn-mark-method-back))))
+           (forward (and (>= arg 0) (not (eq last-command 'ruby-ts--mark-method-back))))
            ;; we are repeating this command
-           (repeat (or (eq last-command 'rtsn-mark-method)
-                       (eq last-command 'rtsn-mark-method-back)))
+           (repeat (or (eq last-command 'ruby-ts--mark-method)
+                       (eq last-command 'ruby-ts--mark-method-back)))
            (start (or (and repeat (use-region-beginning)) (point)))
            (end (or  (and repeat (use-region-end)) (point)))
            (regexp (regexp-opt '("class" "module")))
@@ -459,7 +459,7 @@ report errors as appropriate for this kind of usage."
            comment first-method temp)
       (setq arg (abs arg))
       (unless forward
-        (setq this-command 'rtsn-mark-method-back))
+        (setq this-command 'ruby-ts--mark-method-back))
 
       ;; if class-module is nil, it means we are not within a class or
       ;; module so we use the highest node and find its siblings.
@@ -533,7 +533,7 @@ report errors as appropriate for this kind of usage."
 
 ;; This does not use treesit-search-forward.  I'm going to write one
 ;; that does and compare...
-(defun rtsn--method (point forward)
+(defun ruby-ts--method (point forward)
   "Return cons ( start of method . end of method ).
 Start of method includes the comments before method as well as
 the white space from the beginning of the line.  End of method
