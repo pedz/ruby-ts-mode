@@ -52,6 +52,7 @@
 (defun ts ()
   (interactive)
   (ruby-ts-mode)
+  (setq treesit--indent-verbose t)
   (treesit-explore-mode 'ruby))
 
 ;; (treesit-query-validate 'ruby ruby-ts-mode--operators)
