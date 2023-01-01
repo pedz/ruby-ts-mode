@@ -1,0 +1,109 @@
+I've came across a general problem last night.  I've spent today
+fixing it but I thought I would explain it, the constants, etc.
+
+It started when I was trying to indent the first curly brace of:
+
+foo(
+  [
+    {
+      a: b
+    },
+  ],
+  {
+    c: d
+  }
+)
+
+Background:
+
+treesit--simple-indent and its associated logic deal with cons of
+( anchor . offset ).
+
+anchor is often documented as a node but it isn't.  It is actually a
+point within the buffer.  The higher level code finds the column that
+that position is in, adds offset, and then indents the target node to
+the resulting column.
+
+A query for indent has the general form of ( predicate anchor-function offset )
+where predicate and anchor-function can be functions but offset can not.  As far as
+I can tell, offset must be a value or a symbol that contains a value:
+
+from treesit.el:
+                 (cons anchor-pos (if (symbolp offset)
+                                      (symbol-value offset)
+                                    offset)))
+
+The problem I hit:
+
+For the more complex routines, I started writing indent rules like:
+
+  ( some-simple-query my-function 0 )
+
+so if some-simple-query was true, my-function would be called and it
+would return a position for the column to indent to.
+
+But this doesn't work.  In the case of the {, I was returning the
+position where the [ is plus 2.  But that is the first column of the
+next line.  So the higher level code was putting the { on the left
+column.
+
+So I changed how I am doing things.  Instead of fewer rules with
+smarter functions, I started doing smarter predicates in the query.
+A complicated example is:
+
+           ((and (query "(method_parameters \"(\" _ @indent)")
+                 ruby-ts--same-line-params-p
+                 (node-is ")"))
+            first-sibling 0)
+
+The first three lines being the predicate.  Sometimes I still need
+non-trivial functions for the anchor-function but they always return
+the start of a node without any addition or subtraction being done.
+
+Meanwhile (a new thought but will be connected soon): Stefan talked
+about understanding the logic of the indentation.  And I think I am
+failing at that.  Going back to the example above or even another
+example such as the one before it (these are coming from
+test/lisp/progmodes/ruby-mode-resources/ruby.rb)
+
+bar = foo(
+  a, [
+    1,
+  ],
+  :qux => [
+    3
+  ])
+
+It appears as if the 1 is indented twice (2 * 2 spaces) because it is
+nested two levels from bar (the parent and the bracket).  It is not
+really two spaces from the "a" because the "a" is not its sibling nor
+its ancestor.  Maybe there is other logic for why the 1 is indented
+four spaces that I'm missing.
+
+I can concoct examples where the ( anchor . offset ) is going to fail
+assuming offset is either 0 or 2 (the indent amount).  For example:
+
+bar = foo(
+  a, [[[[[
+            1,
+  ]]]]],
+  :qux => [
+    3
+  ])
+
+The 1 above is indented two spaces from the space after the last [.
+
+The point of this note isn't to point out what won't work but to ask a
+couple of questions (not 100% connected):
+
+1) Can you look at the code and see if my interpretation of what
+offset can be is correct?  Is there no way to make it more
+intelligent (without mucking with treesit.el).
+
+2) Is my assumption above about reason the 1 being indented because it
+is nested two levels from bar correct?  And in the more general case,
+what is the logic of some of the indentation that is in ruby.rb?  I'm
+totally not understanding a lot of those examples.
+
+Thank you for helping out on this...
+Perry

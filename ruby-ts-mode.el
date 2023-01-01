@@ -842,8 +842,8 @@ array or hash."
            ;; Old code -- need to figure out where / when this was used.
            ;;
            ;; ,@(when ruby-ts-mode-call-block
-           ;;     '(((n-p-gp "end" "do_block" "call") (ruby-ts--bol (ruby-ts--grand-parent-node)) 0)
-           ;;       ((n-p-gp nil "do_block" "call") (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+           ;;     '(((n-p-gp "end" "do_block" "call") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
+           ;;       ((n-p-gp nil "do_block" "call") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
            ;;       ((parent-is "body_statement") first-sibling 0)))
 
 
@@ -893,6 +893,15 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; Slam all top level nodes to the left margin
            ((parent-is "program") parent 0)
 
+           ;; Do not indent here docs or the end.  Not sure why it
+           ;; takes the grand-parent but ok fine.
+           ((n-p-gp nil nil "heredoc_body") no-indent 0)
+           ((parent-is "heredoc_body") no-indent 0)
+           ((node-is "heredoc_body") no-indent 0)
+           ;; Do not indent multiline regexp
+           ((n-p-gp nil nil "regex") no-indent 0)
+           ((parent-is "regex") no-indent 0)
+
            ;; if then else elseif notes:
            ;;
            ;;   1. The "then" starts at the end of the line that ends
@@ -916,7 +925,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((match "end" "if")
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
            ((n-p-gp nil "then\\|else\\|elsif" "if\\|unless")
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
 
            ;; case expression: when, in_clause, and else are all
            ;; children of case.  when and in_clause have pattern and
@@ -939,9 +948,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; while / until have only "do" as a child.  The "end" is a
            ;; child of "do".
            ((n-p-gp "end" "do" "while\\|until")
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) 0)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) 0)
            ((n-p-gp nil "do" "while\\|until")
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
             
            ;; begin can have rescue, ensure, else, and end.
            ;; statements are a child of begin.  rescue, ensure, else,
@@ -949,7 +958,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; as a child thus statements will be grand children of
            ;; rescue.
            ((n-p-gp nil "then" "rescue")
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
            ((n-p-gp nil "ensure\\|else" "begin")
             (ruby-ts--align-keywords ruby-ts--parent-node) ruby-ts-mode-indent-offset)
            ((match "rescue\\|ensure\\|else\\|end" "begin")
@@ -962,9 +971,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; children.  The statements are children of the "do".
            ;; And, of course, the "end" is a child of the "do".
            ((n-p-gp "end" "do" "for")
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) 0)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) 0)
            ((n-p-gp nil "do" "for")
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
 
            ;; method has a "body_statement" and the "end" as children.
            ;; The body_statement can have rescue, ensure, and else as
@@ -974,12 +983,12 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((match "end" ,ruby-ts--method-regex)
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
            ((n-p-gp "\\`\\(rescue\\|ensure\\|else\\)\\'" "body_statement" ,ruby-ts--method-regex)
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) 0)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) 0)
            ((n-p-gp nil "rescue\\|ensure\\|else" "body_statement") parent ruby-ts-mode-indent-offset)
            ((match "body_statement" ,ruby-ts--method-regex) ;first statement
             (ruby-ts--align-keywords ruby-ts--parent-node) ruby-ts-mode-indent-offset)
            ((n-p-gp nil "body_statement" ,ruby-ts--method-regex) ;other statements
-            (ruby-ts--align-keywords (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
 
            ;; Chained calls:
            ;; if `ruby-align-chained-calls' is true, the first query
@@ -1020,22 +1029,14 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; 2) With paren, 1st arg on next line
            ((and (query "(argument_list \"(\" _ @indent)")
                  (node-is ")"))
-            grand-parent 0)
+            (ruby-ts--bol ruby-ts--grand-parent-node) 0)
            ((query "(argument_list \"(\" _ @indent)")
-            grand-parent ruby-ts-mode-indent-offset)
+            (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
            ;; 3) No paren, ruby-parenless-call-arguments-indent is t
            ((and ruby-ts--parenless-call-arguments-indent-p (parent-is "argument_list"))
             first-sibling 0)
            ;; 4) No paren, ruby-parenless-call-arguments-indent is nil
-           ((parent-is "argument_list") grand-parent ruby-ts-mode-indent-offset)
-
-           ;; ((and (query "(argument_list \"(\" _ @indent)") (node-is ")")) first-sibling 0)
-           ;; ((query "(argument_list \"(\" _ @indent)") first-sibling 1)
-           ;; ((match ")" "argument_list") ruby-ts--argument-indent 0)
-           ;; ((parent-is "argument_list") ruby-ts--argument-indent ruby-ts-mode-indent-offset)
-
-           ;; Old -- probably remove.
-           ;; ((parent-is "argument_list") first-sibling 0)
+           ((parent-is "argument_list") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
 
            ;; Old... probably too simple
            ((parent-is "block_parameters") first-sibling 1)
@@ -1050,36 +1051,38 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; first sibling is the "{" or "[".  There is a special
            ;; case where the hash is an argument to a method.  These
            ;; need to be processed first.
-           ((n-p-gp "}" "hash" "argument_list") first-sibling 0)
-           ((n-p-gp nil "hash" "argument_list") first-sibling ruby-ts-mode-indent-offset)
-           ((n-p-gp "]" "array" "argument_list") first-sibling 0)
-           ((n-p-gp nil "array" "argument_list") first-sibling ruby-ts-mode-indent-offset)
+
            ((and ruby-ts--same-line-hash-array-p (match "}" "hash"))
             first-sibling 0)
            ((and ruby-ts--same-line-hash-array-p (parent-is "hash"))
             (nth-sibling 0 ruby-ts--true) 0)
-           ((match "}" "hash") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
-           ((parent-is "hash") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
            ((and ruby-ts--same-line-hash-array-p (match "]" "array"))
             first-sibling 0)
            ((and ruby-ts--same-line-hash-array-p (parent-is "array"))
             (nth-sibling 0 ruby-ts--true) 0)
-           ((match "]" "array") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
-           ((parent-is "array") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+
+           ((n-p-gp "}" "hash" "assignment")  (ruby-ts--bol ruby-ts--grand-parent-node) 0)
+           ((n-p-gp nil "hash" "assignment")  (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+           ((n-p-gp "]" "array" "assignment") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
+           ((n-p-gp nil "array" "assignment") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+
+           ((n-p-gp "}" "hash" "argument_list")  first-sibling 0)
+           ((n-p-gp nil "hash" "argument_list")  first-sibling ruby-ts-mode-indent-offset)
+           ((n-p-gp "]" "array" "argument_list") first-sibling 0)
+           ((n-p-gp nil "array" "argument_list") first-sibling ruby-ts-mode-indent-offset)
+
+           ((match "}" "hash")  first-sibling 0)
+           ((parent-is "hash")  first-sibling ruby-ts-mode-indent-offset)
+           ((match "]" "array") first-sibling 0)
+           ((parent-is "array") first-sibling ruby-ts-mode-indent-offset)
            
            ;; If the previous method isn't finished yet, this will get
            ;; the next method indented properly.
            ((n-p-gp ,ruby-ts--method-regex "body_statement" ,ruby-ts--class-or-module-regex)
-            (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+            (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
 
            ;; Match the end of a class / modlue
            ((match "end" ,ruby-ts--class-or-module-regex) parent 0)
-
-           ;; Do not indent here docs or the end.  Not sure why it
-           ;; takes the grand-parent but ok fine.
-           ((n-p-gp nil nil "heredoc_body") no-indent 0)
-           ((parent-is "heredoc_body") no-indent 0)
-           ((node-is "heredoc_body") no-indent 0)
 
            ;; a "do_block" has a "body_statement" child which has the
            ;; statements as children within it.  The problem is that
@@ -1090,11 +1093,11 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; body_statement for all others. ... Fine.  Be that way.
            ;; Ditto for "block" and "block_body"
            ((node-is "body_statement") parent-bol ruby-ts-mode-indent-offset)
-           ((parent-is "body_statement") (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
+           ((parent-is "body_statement") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
            ((match "end" "do_block") parent-bol 0)
            ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
-           ((n-p-gp nil "block_body" "block") (ruby-ts--bol (ruby-ts--grand-parent-node)) ruby-ts-mode-indent-offset)
-           ((match "}" "block") (ruby-ts--bol (ruby-ts--grand-parent-node)) 0)
+           ((n-p-gp nil "block_body" "block") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+           ((match "}" "block") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
 
            ;; Try and indent two spaces when all else fails.
            (catch-all parent-bol ruby-ts-mode-indent-offset))))
