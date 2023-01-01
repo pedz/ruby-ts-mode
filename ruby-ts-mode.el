@@ -211,6 +211,12 @@
 
 (declare-function treesit-parser-create "treesit.c")
 (declare-function ruby-smie--indent-to-stmt-p "ruby-mode.el" (keyword))
+(declare-function ruby-ts--forward-statement-start "ruby-ts-navigation.el")
+(declare-function ruby-ts--mark-method "ruby-ts-navigation.el")
+(declare-function ruby-ts--mark-statement "ruby-ts-navigation.el")
+(declare-function ruby-ts--forward-method "ruby-ts-navigation.el")
+(declare-function ruby-ts--raw-prev-sibling "ruby-ts-navigation.el")
+(declare-function ruby-ts--raw-next-sibling "ruby-ts-navigation.el")
 
 (defcustom ruby-ts-mode-indent-offset 2
   "Number of spaces for each indentation step in `ruby-ts-mode'."
@@ -231,100 +237,12 @@ is expected return a list that follows the form of
                  (function :tag "A function for user customized style" ignore))
   :group 'ruby)
 
-;; Remove for now.
-;;
-;; (defcustom ruby-ts-mode-right-justify-arrays t
-;;   "Right justify elements in an array.
-;;
-;; e.g.             or
-;;   array = [            array = [   145,
-;;        145,                      21110,
-;;      21110,                         11]
-;;         11
-;;     ]
-;;
-;; verses           or
-;;
-;;   array = [            array = [145,
-;;     145,                 21110,
-;;     21110,               11]
-;;     11
-;;     ]"
-;;   :type 'boolean
-;;   :group 'ruby)
-
-;; I need to come back and revisit this after the tests are working.
-;;
-;; (defcustom ruby-ts-mode-indent-split-exp-by-term t
-;;   "Indent expressions split across lines as `ruby-mode' did.
-
-;; If set to true, long expressions that are split across lines will be
-;; indented like `enh-ruby-mode' would indent the lines which is similar
-;; to `c-mode'.  Thus:
-
-;; with_paren = (a + b *
-;;               c * d +
-;;               12)
-
-;; without_paren = a + b *
-;;   c * d +
-;;   12
-
-;; If set to nil, long expressions are indented based upon the expression
-;; parsed hierarchy which is similar to how `ruby-mode' indented.  Thus:
-
-;; with_paren = (a + b *
-;;                   c * d +
-;;               12)
-
-;; without_paren = a + b *
-;;                     c * d +
-;;                 12"
-;;   :type 'boolean
-;;   :group 'ruby)
-
 (defcustom ruby-ts-mode-include-predefined-constants t
   "Font lock Ruby pre-defined global constants.
 When true, `ruby-ts--predefined-constants' are font lock the same
 as `ruby-ts--predefined'."
   :type 'boolean
   :group 'ruby)
-
-(defcustom ruby-ts-mode-call-block t
-  "When non-nil:
-
-some_variable = 4 +
-  some_array.
-    duck.
-    reduce do |acc, x|
-    acc + x
-  end
-
-foo
-  .bar
-  .dog
-  .house do |z|
-  dog = 12
-  cat = 44
-end
-
-verses when nil:
-
-
-some_variable = 4 +
-  some_array.
-    duck.
-    reduce do |acc, x|
-      acc + x
-    end
-
-foo
-  .bar
-  .dog
-  .house do |z|
-    dog = 12
-    cat = 44
-  end")
 
 (defvar ruby-ts--syntax-table
   (let ((table (make-syntax-table)))
@@ -442,6 +360,22 @@ These are currently unused")
       string-end)
   "Regular expression matching methods and singleton methods.")
 
+(defconst ruby-ts--statement-container-regexp
+  (rx string-start
+      (or "program"
+          "block_body"
+          "begin_block"
+          "end_block"
+          "do"
+          "else"
+          "then"
+          "ensure"
+          "body_statement"
+          "parenthesized_statements"
+          "interpolation")
+      string-end)
+  "Regular expression of the nodes that can constain statements.")
+
 (defun ruby-ts--lineno (node)
   "Return line number of NODE's start."
   (line-number-at-pos (treesit-node-start node)))
@@ -484,11 +418,6 @@ values of OVERRIDE"
         (treesit-fontify-with-override node-start plus-1 font-lock-comment-delimiter-face override))
     (treesit-fontify-with-override (max plus-1 start) (min node-end end) font-lock-comment-face override)))
 
-;; Ideas of what could be added:
-;;   1. The regular expressions start, end, and content could be font
-;;      locked.  Ditto for the command strings `foo`.  The symbols
-;;      inside a %s, %i, and %I could be given the "symbol" font.
-;;      etc.
 (defun ruby-ts--font-lock-settings (language)
   "Tree-sitter font-lock settings.
 Currently LANGUAGE is ignored but should be set to `ruby'."
@@ -630,7 +559,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
    `(([,@ruby-ts--punctuation] @font-lock-punctuation-face))))
 
 (defun ruby-ts--first-non-comment-child (node)
-  "Return the first named child of NODE that is not a comment"
+  "Return the first named child of NODE that is not a comment."
   (let ((child (treesit-node-child node 0 t)))
     (while (and child
                 (equal "comment" (treesit-node-type child)))
@@ -654,7 +583,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
     (string-match-p regexp (treesit-node-type node))))
 
 (defun ruby-ts--parent-node (_n parent &rest _)
-  "Return the parent node matching ident rule."
+  "Return the PARENT node matching ident rule."
   parent)
 
 (defun ruby-ts--align-keywords (pred)
@@ -694,7 +623,7 @@ Returns bol of the current line if PRED returns nil."
     (string-match-p type (treesit-node-type (treesit-node-parent parent)))))
 
 (defun ruby-ts--grand-parent-node (_n parent &rest _)
-  "Return grand parent node."
+  "Return parent of PARENT node."
   (treesit-node-parent parent))
 
 (defun ruby-ts--ancestor-start (type)
@@ -711,12 +640,12 @@ Returns bol of the current line if PRED returns nil."
   "Return value of `ruby-align-chained-calls'."
   ruby-align-chained-calls)
 
-(defun ruby-ts--parenless-call-arguments-indent-p (&rest -)
+(defun ruby-ts--parenless-call-arguments-indent-p (&rest _)
   "Return value of `ruby-parenless-call-arguments-indent'."
   ruby-parenless-call-arguments-indent)
 
-(defun ruby-ts--align-chain (node parent &rest _)
-  "Align chained method calls.
+(defun ruby-ts--align-chain (_n parent &rest _)
+  "Align chained method call.
 Align NODE which will be the dot (.) to the dot of the
 first (outermost) call in the chain.  See
 `ruby-align-chained-calls' for details.  PARENT will be the
@@ -729,40 +658,33 @@ non-nil."
       (setq parent first-call))
     (treesit-node-start (treesit-search-subtree parent "\\." nil t))))
 
-(defun ruby-ts--align-chain-calls ()
-  "To Be Documented"
-  (lambda (node parent &rest _)
-    (and ruby-align-chained-calls
-         (equal "." (treesit-node-type node))
-         (equal "call" (treesit-node-type parent)))))
-
-(defun ruby-ts--same-line-args-p (node parent &rest _)
+(defun ruby-ts--same-line-args-p (_n parent &rest _)
   "Return non-nil when first argument is on the same line as the method.
 PARENT will be argument_list.  NODE can be the close paren."
   (let* ((method (treesit-node-parent parent))
          (first-param (ruby-ts--first-non-comment-child parent)))
     (= (ruby-ts--lineno method) (ruby-ts--lineno first-param))))
 
-(defun ruby-ts--same-line-params-p (node parent &rest _)
+(defun ruby-ts--same-line-params-p (_n parent &rest _)
   "Return non-nil when first parameter is on the same line as the method.
 PARENT will be method_parameters.  NODE can be the close paren."
   (let* ((method (treesit-node-parent parent))
          (first-param (ruby-ts--first-non-comment-child parent)))
     (= (ruby-ts--lineno method) (ruby-ts--lineno first-param))))
 
-(defun ruby-ts--param-indent (node parent &rest _)
+(defun ruby-ts--param-indent (_n parent &rest _)
   "Indent parameters that start on next line.
 Given: NODE is the parameter.  PARENT is
-method_parameters. `ruby-ts--same-line-params-p' is nil.  Indent
+method_parameters.  `ruby-ts--same-line-params-p' is nil.  Indent
 according to `ruby-method-params-indent'
 
-ruby-method-params-indent is 0
+If `ruby-method-params-indent' is 0
 def foo(
   param1,
   param2
 )
 
-Params start on next line, ruby-method-params-indent is t
+Params start on next line, `ruby-method-params-indent' is t
 def foo(
       param1,
       param2
@@ -785,10 +707,10 @@ def foo(
       (+ (treesit-node-start method) (or ruby-method-params-indent 0)))))
 
 (defun ruby-ts--true (&rest _)
-  "I have no idea why I can't just put t but I can put 0"
+  "I have no idea why I can't just put t but I can put 0."
   t)
 
-(defun ruby-ts--same-line-hash-array-p (node parent &rest _)
+(defun ruby-ts--same-line-hash-array-p (_n parent &rest _)
   "Return non-nil if first element and open brace are on the same line.
 NODE is the element or closing brace or bracket.  PARENT is the
 array or hash."
@@ -796,94 +718,51 @@ array or hash."
          (first-child (ruby-ts--first-non-comment-child parent)))
     (= (ruby-ts--lineno open-brace) (ruby-ts--lineno first-child))))
 
-;;
-;; end of functions that can be used for queries
-;;
-
 (defalias 'ancestor-node #'ruby-ts--ancestor-is
   "Return ancestor node whose type matches regexp TYPE.")
 
-;; (defun ruby-ts--right-justify-array-leaf ( node parent &rest _)
-;;   "Right justify leaf NODE within PARENT array."
-;;   (let* ((children (treesit-node-children parent t))
-;;          (open-bracket (nth 0 (treesit-node-children parent nil)))
-;;          (first-child (nth 0 children))
-;;          (same-line (equal (line-number-at-pos (treesit-node-start open-bracket))
-;;                            (line-number-at-pos (treesit-node-start first-child))))
-;;          (max-length (apply #'max (mapcar (lambda ( child )
-;;                                             (- (treesit-node-end child) (treesit-node-start child)))
-;;                                           children)))
-;;          (node-length (- (treesit-node-end node) (treesit-node-start node)))
-;;          (ruby-ts--grand-parent-node (treesit-node-parent parent))
-;;          ;; if there is no grand-parent, node is adjusted relative to
-;;          ;; the bol of the line where point happens to be.
-;;          (grand-parent-bol (save-excursion
-;;                              (if ruby-ts--grand-parent-node
-;;                                  (goto-char (treesit-node-start ruby-ts--grand-parent-node)))
-;;                              (back-to-indentation)
-;;                              (point)))
-;;          (align-column (if same-line
-;;                            (- (+ (treesit-node-end open-bracket) max-length 1) ruby-ts-mode-indent-offset)
-;;                          (+ grand-parent-bol max-length 1))))
+(defun ruby-ts--assignment-ancestor (node &rest _)
+  "Return the assignment ancestor of NODE if any."
+  (treesit-parent-until node (ruby-ts--type-pred "\\`assignment\\'")))
 
-;;     (- align-column node-length)))
+(defun ruby-ts--statement-ancestor (node &rest _)
+  "Return the statement ancestor of NODE if any.
+A statement is defined as a child of a statement container where
+a statement container is a node that matches
+`ruby-ts--statement-container-regexp'."
+  (let* ((statement node)
+         (parent (treesit-node-parent statement)))
+    (while (and parent
+                statement
+                (not (string-match-p ruby-ts--statement-container-regexp
+                                     (treesit-node-type parent))))
+      (setq statement parent
+            parent (treesit-node-parent parent)))
+    statement))
 
+(defun ruby-ts--is-in-condition (node &rest _)
+  "Return the condition node if NODE is within a condition."
+  (while (and node
+              (not (equal "condition" (treesit-node-field-name node)))
+              (not (string-match-p ruby-ts--statement-container-regexp
+                                   (treesit-node-type node))))
+    (setq node (treesit-node-parent node)))
+  (and (equal "condition" (treesit-node-field-name node)) node))
 
-           ;; REMOVED FROM ruby-ts--indent-styles
-           ;;
-           ;;
-           ;; FIXME: What follows are two sets of three queries.  The
-           ;; first trigger when the option is enabled and the second
-           ;; trigger when the option is disabled.  The problem is
-           ;; that this is not dynamic.  I plan to rewrite these so
-           ;; that the value of the option is retrieved at the time
-           ;; the line is indented like I'm doing elsewhere.
-           ;;
-           ;; Old code -- need to figure out where / when this was used.
-           ;;
-           ;; ,@(when ruby-ts-mode-call-block
-           ;;     '(((n-p-gp "end" "do_block" "call") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
-           ;;       ((n-p-gp nil "do_block" "call") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
-           ;;       ((parent-is "body_statement") first-sibling 0)))
-
-
-           ;; Old code before ruby-ts--align-keywords
-           ;; "while" and "until" have a "do" child that have
-           ;; statements as their children.
-           ;; ((n-p-gp "end" "do" "while") grand-parent 0)
-           ;; ((parent-is "do") grand-parent ruby-ts-mode-indent-offset)
-           
-           ;; What I had before -- remove both for now.
-           ;; ((node-is "end") parent 0)
-           ;; ((node-is "end") parent-bol 0)
-
-           ;; old code before ruby-ts--align-keywords
-           ;; ((parent-is "begin") parent ruby-ts-mode-indent-offset)
-
-           ;; I want to redo this as well so lets just remove it for now.
-           ;; ,@(when ruby-ts-mode-right-justify-arrays
-           ;;     '(((query "(array \"[\" ( (integer) ( \",\" (_) )*) @indent \",\"? \"]\")")
-           ;;        ruby-ts--right-justify-array-leaf ruby-ts-mode-indent-offset)
-           ;;       ((n-p-gp "]" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)))
-
-           ;; I need to come back and revisit this after the tests are working.
-           ;;
-           ;; ,@(when ruby-ts-mode-indent-split-exp-by-term
-           ;;     '(((ruby-ts--ancestor-is "parenthesized_statements") (ruby-ts--ancestor-start "parenthesized_statements") 1)
-           ;;       ((ruby-ts--ancestor-is "assignment") (ruby-ts--ancestor-start "assignment") ruby-ts-mode-indent-offset)))
-
-           ;; "when" list spread across multiple lines
-           ;; old code...
-           ;; ((n-p-gp "pattern" "when" "case") (nth-sibling 1) 0)
-           ;; ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
-           ;; ((node-is "when")  parent-bol 0)
-
-           ;; Assignment of hash and array
-           ;; This needs to be controlled by an option.
-           ;; ((n-p-gp "}" "hash" "assignment") grand-parent 0)
-           ;; ((n-p-gp "pair" "hash" "assignment") grand-parent ruby-ts-mode-indent-offset)
-           ;; ((n-p-gp "]" "array" "assignment") grand-parent 0)
-           ;; ((n-p-gp ".*" "array" "assignment") grand-parent ruby-ts-mode-indent-offset)
+(defun ruby-ts--endless-method (node &rest _)
+  "Return the expression node if NODE is in an endless method.
+i.e. expr of def foo(args) = expr is returned."
+  (let* ((method node))
+    (while (and method
+                (not (string-match-p ruby-ts--method-regex (treesit-node-type method))))
+      (setq method (treesit-node-parent method)))
+    (when method
+      (if (equal "=" (treesit-node-type (treesit-node-child method 3 nil)))
+          (treesit-node-child method 4 nil)))))
+      
+;;
+;; end of functions that can be used for queries
+;;
 
 (defun ruby-ts--indent-styles (_language)
   "Indent rules supported by `ruby-ts-mode'.
@@ -964,7 +843,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((match "rescue\\|ensure\\|else\\|end" "begin")
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
            ((parent-is "begin")         ;last
-            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-ts-mode-indent-offset)            
+            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-ts-mode-indent-offset)
 
            ;; for ... I don't think I have ever used a for loop in
            ;; Ruby.  The "in" (not an in_clause) and "do" are
@@ -1041,8 +920,11 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; Old... probably too simple
            ((parent-is "block_parameters") first-sibling 1)
 
-           ;; Changed for ruby-align-to-stmt-keywords-t
-           ((parent-is "binary") first-sibling ruby-ts-mode-indent-offset)
+           ((and (parent-is "binary")
+                 (or ruby-ts--assignment-ancestor
+                     ruby-ts--is-in-condition
+                     ruby-ts--endless-method))
+            first-sibling 0)
 
            ;; ruby-mode does not touch these...
            ((match "bare_string" "string_array") no-indent 0)
@@ -1060,6 +942,23 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
             first-sibling 0)
            ((and ruby-ts--same-line-hash-array-p (parent-is "array"))
             (nth-sibling 0 ruby-ts--true) 0)
+
+           ;; NOTE to folks trying to understand my insanity...
+           ;; I having trouble understanding the "logic" of why things
+           ;; are indented like they are so I am adding special cases
+           ;; hoping at some point I will be struck by lightning.
+           ((and (n-p-gp "}" "hash" "pair")
+                 (not ruby-ts--same-line-hash-array-p))
+            grand-parent 0)
+           ((and (n-p-gp "pair" "hash" "pair")
+                 (not ruby-ts--same-line-hash-array-p))
+            grand-parent ruby-ts-mode-indent-offset)
+           ((and (n-p-gp "}" "hash" "method")
+                 (not ruby-ts--same-line-hash-array-p))
+            grand-parent 0)
+           ((and (n-p-gp "pair" "hash" "method")
+                 (not ruby-ts--same-line-hash-array-p))
+            grand-parent ruby-ts-mode-indent-offset)
 
            ((n-p-gp "}" "hash" "assignment")  (ruby-ts--bol ruby-ts--grand-parent-node) 0)
            ((n-p-gp nil "hash" "assignment")  (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
@@ -1098,6 +997,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
            ((n-p-gp nil "block_body" "block") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
            ((match "}" "block") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
+
+           ;; Chained strings
+           ((match "string" "chained_string") first-sibling 0)
 
            ;; Try and indent two spaces when all else fails.
            (catch-all parent-bol ruby-ts-mode-indent-offset))))

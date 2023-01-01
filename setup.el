@@ -49,12 +49,27 @@
   (treesit-font-lock-recompute-features)
   (treesit-inspect-mode))
 
-(defun ts ()
+(defun do-locals ()
   (interactive)
-  (ruby-ts-mode)
-  (setq treesit--indent-verbose t)
-  (treesit-explore-mode 'ruby))
-
+  (setq-local add-log-current-defun-function #'ruby-ts--log-current-function)
+  (setq-local comment-start "# ")
+  (setq-local comment-end "")
+  (setq-local comment-start-skip "#+ *")
+  (setq-local treesit-simple-indent-rules (ruby-ts--set-indent-style 'ruby))
+  (setq-local treesit-font-lock-settings (ruby-ts--font-lock-settings 'ruby))
+  (setq-local treesit-defun-type-regexp ruby-ts--method-regex)
+  (setq-local treesit-defun-prefer-top-level nil)
+  (setq-local imenu-create-index-function #'ruby-ts--imenu)
+  (setq-local which-func-functions nil)
+  (setq-local treesit-font-lock-feature-list
+              '(( comment )
+                ( keyword regexp string type)
+                ( builtin constant constant-assignment
+                  delimiter escape-sequence function global
+                  global-assignment instance instance-assignment
+                  interpolation literal symbol variable variable-assignment )
+                ( bracket error operator punctuation ))))
+  
 ;; (treesit-query-validate 'ruby ruby-ts-mode--operators)
 (global-set-key (kbd "H-c") #'describe-char)
 

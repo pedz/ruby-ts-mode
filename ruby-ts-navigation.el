@@ -313,26 +313,12 @@ next line."
       (setq end (point)))
     (cons start end)))
 
-(defconst ruby-ts--statement-parent-regexp
-  (rx string-start
-      (or "program"
-          "block_body"
-          "begin_block"
-          "end_block"
-          "do"
-          "else"
-          "then"
-          "ensure"
-          "body_statement"
-          "parenthesized_statements"
-          "interpolation")
-      string-end)
-  "Regular expression of the nodes that can constain statements.")
-
 (defun ruby-ts--is-comment (node)
   "Return t if NODE type is comment."
   (string-match-p "comment" (treesit-node-type node)))
 
+;; NOTE: I added ruby-ts--statement-ancestor to ruby-ts-mode.el.  This
+;; routine might be able to leverage that routine.
 (defun ruby-ts--statement (point forward)
   "Return cons ( start of statement . end of statement ).
 Starting at POINT and moving forward if FORWARD, else backwards, the
@@ -350,7 +336,7 @@ statement includes up to and including the new line."
   ;;
   ;; So the node at point is found.  Then the parents are found until
   ;; a node that can contain statements is found.  This node's type
-  ;; will match ruby-ts--statement-parent-regexp.  The immediate child of
+  ;; will match ruby-ts--statement-container-regexp.  The immediate child of
   ;; this node will be the statement.
   (let* ((statement (treesit-node-at point))
          (parent (treesit-node-parent statement)))
@@ -359,7 +345,7 @@ statement includes up to and including the new line."
     (message "1 parent: %S; statement: %S" parent statement)
     (while (and parent
                 statement
-                (not (string-match-p ruby-ts--statement-parent-regexp
+                (not (string-match-p ruby-ts--statement-container-regexp
                                      (treesit-node-type parent))))
       (setq statement parent
             parent (treesit-node-parent parent))
