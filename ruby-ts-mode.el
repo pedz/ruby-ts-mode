@@ -1,79 +1,41 @@
-;;; ruby-ts-mode.el --- tree-sitter support for Ruby  -*- lexical-binding: t; -*-
+;;; ruby-ts-mode.el --- Major mode for editing Ruby files using tree-sitter -*- lexical-binding: t; -*-
 
-;; This is currently a work in progress.  My intent is to release it
-;; with whatever copyright notice Free Software Foundation,
-;; Inc. wants.
+;; Copyright (C) 2022-2023 Free Software Foundation, Inc.
 
-;; Author     : Perry Smith <pedz@easesoftware.com>
-;; Created    : December 2022
-;; Keywords   : ruby languages tree-sitter
+;; Author: Perry Smith <pedz@easesoftware.com>
+;; Created: December 2022
+;; Keywords: ruby languages tree-sitter
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
-;; This file creates ruby-ts-mode which is a major mode for GNU Emacs
-;; for editting Ruby files that uses Tree Sitter to parse the
-;; language.  More information about Tree Sitter can be found in the
-;; ELisp Info pages as well as this website:
-;; https://tree-sitter.github.io/tree-sitter/
+;; This file defines ruby-ts-mode which is a major mode for editting
+;; Ruby files that uses Tree Sitter to parse the language. More
+;; information about Tree Sitter can be found in the ELisp Info pages
+;; as well as this website: https://tree-sitter.github.io/tree-sitter/
 
-;; The process to enable using ruby-ts-mode or any major mode
-;; leveraging tree sitter is currently a bit complex.  There are four
-;; pieces that needs to be accomplished.
+;; For this major mode to work, Emacs has to be compiled with
+;; tree-sitter support, and the Ruby grammar has to be compiled and
+;; put somewhere Emacs can find it.  See the docstring of
+;; `treesit-extra-load-path'.
 
-;; * Emacs needs to be compiled with tree-sitter enabled
-;;     If you compile your own Emacs, this is accomplished with adding
-;;     --with-native-compilation to the configure line.  If you are
-;;     using pre-built Emacs, then they will need to alter their build
-;;     process.  To test to see if your Emacs is enabled, execute
-;;     (treesit-available-p)
-
-;; * The tree sitter binary needs to be installed
-;;     This is platform dependent.  On macOS, brew can be used.  Other
-;;     platforms and their package managers should eventually make it
-;;     available.  There is also doing it by hand.
-;;
-;;         git clone https://github.com/tree-sitter/tree-sitter.git
-;;         cd tree-sitter
-;;         make
-;;         make install
-
-;; * The tree sitter language specific parser needs to be installed
-;;     If you have the Emacs source, you can cd to
-;;     admin/notes/tree-sitter/build-module and execute:
-;;         ./build.sh ruby
-;;     or you can download this git repository:
-;;         git clone git@github.com:casouri/tree-sitter-module.git
-;;         cd tree-sitter-module
-;;         ./build.sh ruby
-;;     In both cases, a dist subdirectory is created and the shared
-;;     library is in that directory.  The library needs to be put
-;;     either in one of three places:
-;;       a: the standard shared library load path such as
-;;          /usr/local/lib.
-;;       b: A subdirectory in your emacs-user-directory called
-;;          tree-sitter.
-;;       c: Any place and point treesit-extra-load-path to them.
-
-;; * The appropriate major mode needs to be loaded and enabled
-;;     a: (load "/path/to/ruby-ts-mode")
-;;        M-x ruby-ts-mode
-;;     b: (require 'ruby-ts-mode)
-;;        M-x ruby-ts-mode
-;;     c: (add-to-list 'auto-mode-alist '("\\.rb\\)\\'" . ruby-ts-mode))
-;;   With the latter two assuming that this file is in your load-path.
+;; This mode doesn't associate itself with .rb files automatically.
+;; You can do that either by prepending to the value of
+;; `auto-mode-alist', or using `major-mode-remap-alist'.
 
 ;; Tree Sitter brings a lot of power and versitility which can be
 ;; broken into these features.
@@ -88,12 +50,12 @@
 
 ;; Currently tree treesit-font-lock-feature-list is set with the
 ;; following levels:
-;;   1: comment
+;;   1: comment method-definition
 ;;   2: keyword regexp string type
-;;   3: builtin constant constant-assignment delimiter escape-sequence
-;;      function global global-assignment instance instance-assignment
-;;      interpolation literal symbol variable variable-assignment
-;;   4: bracket error operator punctuation
+;;   3: builtin constant delimiter escape-sequence
+;;      global instance
+;;      interpolation literal symbol variable
+;;   4: bracket error function operator punctuation
 
 ;; Thus if treesit-font-lock-level is set to level 3 which is its
 ;; default, all the features listed in levels 1 through 3 above will
@@ -103,102 +65,11 @@
 
 ;; describe-face can be used to view how a face looks.
 
-;; Fonts defined in font-lock.el:
-;;   font-lock-punctuation-face -- User for comma and other
-;;     punctuation marks if there are any.  Feature: punctuation
-
-;;   font-lock-bracket-face - Used for brackets: (, ), {, }, [, ].
-;;     Feature: bracket
-
-;;   font-lock-delimiter-face -- Used for quotes ("), (') as well as
-;;     percent literals: %q, %, %Q, %w, %W, %i, %I, %s, %x.
-;;     Feature: delimiter
-
-;;   font-lock-constant-face -- Used for symbols and delimted
-;;   symbols (e.g. :"foo dog").  Also, values within %i, %I, and %s
-;;   literals.  Feature: symbol
-
-;;   font-lock-builtin-face - Used for Ruby's global variables.
-;;     Feature: builtin
-
-;;   font-lock-comment-delimiter-face -- Used for the leading "#" in
-;;     comments.  Feature: comment
-
-;;   font-lock-comment-face -  Used for comments.
-;;     Feature: comment
-
-;;   font-lock-constant-face - Used for true, false, nil, self, and
-;;     super.  Feature: constant
-
-;;   tbd-lvalue -- Used for the lvalue of an assignment.
-;;     e.g. the foo will be colored different from the blah or bar:
-;;     foo = blah + bar
-;;     This allows the user to visually see assignments in the code.
-;;     Feature: variable-assignment
-
-;;   tbd-constant-assignment-face -- User for the declaration and
-;;     assignment of a constant.  e.g.  Foo = 12 will be colored
-;;     differently from a free standing Foo.
-;;     Feature: constant-assignment
-
-;;   font-lock-escape-face -- Used to color escape sequences within
-;;     strings.  For example in the string "Hippo\tWater", the \t
-;;     sequence will be colored differently from the rest of the
-;;     string.  Feature: escape-sequence
-;;  
-;;   font-lock-function-name-face -- Used for method names.  For
-;;     example, the foo in either def foo ... or foo(a, b, c)
-;;     Feature: function
-
-;;   font-lock-keyword-face -- Used for keywords listed in
-;;   ruby-ts--keywords.  Feature: keyword
-
-;;   font-lock-negation-char-face -- Used for '!'
-;;     Keyword: operator
-
-;;   font-lock-number-face -- Used for integers, floats, complex, and
-;;     rational numbers.  The unary + and - are also font locked when
-;;     it precedes a number.  Feature: literal
-
-;;   font-lock-operator-face -- Used for operators listed in
-;;     ruby-ts--operators.  Note ruby-ts--operators is made
-;;     up of several other lists such as
-;;     ruby-ts--operators-arithmetic so the user can easily
-;;     customize the set of operators affected.  Feature: operator
-
-;;   font-lock-variable-name-face -- Used for global variable and
-;;     instance variable references.  Feature: global
-
-;;   font-lock-property-face -- User for global variable and instance
-;;     variable assignments.  Feature: global-assignment
-
-;;   font-lock-regexp-grouping-backslash -- Used for the contents of
-;;     regular expressions.  The parser does not pick out grouping
-;;     constructs, etc within regular expressions.  I believe, in
-;;     theory, this could be added perhaps later.  Feature: regexp
-
-;;   font-lock-regexp-grouping-construct -- User for the '/' or '%r{'
-;;     containing a regular expression.  Feature: regexp
-
-;;   font-lock-string-face -- Used for strings.
-;;     Feature: string
-
-;;   font-lock-doc-face -- Used for string interpolation delimiters #{
-;;   and }.  Feature: interpolation
-
-;;   font-lock-type-face -- used for constants (i.e. identifiers
-;;   starting with upper case).  Feature: type
-
-;;   tbd-variable-face -- Used for variables.
-;;     Feature: variable
-
-;;   font-lock-warning-face -- Used for syntax errors according to the
-;;     tree sitter Ruby language parser.  Feature: error
-
 ;; * Indent
 
-;; Describe ruby-ts-mode-right-justify-arrays and
-;; ruby-ts-mode-indent-split-exp-by-term.
+;; ruby-ts-mode tries to adhere to the indentation related user
+;; options from ruby-mode, such as ruby-indent-level,
+;; ruby-indent-tabs-mode, and so on.
 
 ;; * IMenu
 ;; * Navigation
@@ -210,125 +81,30 @@
 (require 'ruby-mode)
 
 (declare-function treesit-parser-create "treesit.c")
-(declare-function ruby-smie--indent-to-stmt-p "ruby-mode.el" (keyword))
-(declare-function ruby-ts--forward-statement-start "ruby-ts-navigation.el")
-(declare-function ruby-ts--mark-method "ruby-ts-navigation.el")
-(declare-function ruby-ts--mark-statement "ruby-ts-navigation.el")
-(declare-function ruby-ts--forward-method "ruby-ts-navigation.el")
-(declare-function ruby-ts--raw-prev-sibling "ruby-ts-navigation.el")
-(declare-function ruby-ts--raw-next-sibling "ruby-ts-navigation.el")
 
-(defcustom ruby-ts-mode-indent-offset 2
-  "Number of spaces for each indentation step in `ruby-ts-mode'."
-  :version "29.1"
-  :type 'integer
-  :safe 'integerp
-  :group 'ruby)
+(defgroup ruby-ts nil
+  "Major mode for editing Ruby code."
+  :prefix "ruby-ts-"
+  :group 'languages)
 
-(defcustom ruby-ts-mode-indent-style 'base
-  "Style used for indentation.
-
-Currently can only be set to BASE.  If one of the supplied styles
-doesn't suffice a function could be set instead.  This function
-is expected return a list that follows the form of
-`treesit-simple-indent-rules'."
-  :version "29.1"
-  :type '(choice (symbol :tag "Base" 'base)
-                 (function :tag "A function for user customized style" ignore))
-  :group 'ruby)
-
-(defcustom ruby-ts-mode-include-predefined-constants t
-  "Font lock Ruby pre-defined global constants.
-When true, `ruby-ts--predefined-constants' are font lock the same
-as `ruby-ts--predefined'."
-  :type 'boolean
-  :group 'ruby)
-
-(defvar ruby-ts--syntax-table
-  (let ((table (make-syntax-table)))
-    ;; Mostly stolen from ruby-mode but enh-ruby-mode also added ??
-    (modify-syntax-entry ?#  "<"  table)
-    (modify-syntax-entry ?$  "'"  table)
-    (modify-syntax-entry ?%  "."  table)
-    (modify-syntax-entry ?&  "."  table)
-    (modify-syntax-entry ?*  "."  table)
-    (modify-syntax-entry ?+  "."  table)
-    (modify-syntax-entry ?-  "."  table)
-    (modify-syntax-entry ?/  "."  table)
-    (modify-syntax-entry ?:  "'"  table)
-    (modify-syntax-entry ?<  "."  table)
-    (modify-syntax-entry ?=  "."  table)
-    (modify-syntax-entry ?>  "."  table)
-    (modify-syntax-entry ??  "_"  table)
-    (modify-syntax-entry ?@  "'"  table)
-    (modify-syntax-entry ?\" "\"" table)
-    (modify-syntax-entry ?\' "\"" table)
-    (modify-syntax-entry ?\( "()" table)
-    (modify-syntax-entry ?\) ")(" table)
-    (modify-syntax-entry ?\; "."  table)
-    (modify-syntax-entry ?\[ "(]" table)
-    (modify-syntax-entry ?\\ "\\" table)
-    (modify-syntax-entry ?\] ")[" table)
-    (modify-syntax-entry ?\` "\"" table)
-    (modify-syntax-entry ?\n ">"  table)
-    (modify-syntax-entry ?\{ "(}" table)
-    (modify-syntax-entry ?\} "){" table)
-    (modify-syntax-entry ?_  "_"  table)
-    (modify-syntax-entry ?|  "."  table)
-    table)
-  "Syntax table used by ‘ruby-ts-mode’ buffers.")
-
-(defvar ruby-ts--operators-arithmetic
-  '("+" "-" "*" "/" "%" "**")
-  "Ruby arithmetic operators for tree-sitter font-locking.")
-
-;; treesit-query-validate doesn't like these:
-;; "eql?" "equal?"
-(defvar ruby-ts--operators-comparison
-  '("==" "!=" ">" "<" ">=" "<=" "<=>" "===")
-  "Ruby comparison operators for tree-sitter font-locking.")
-
-(defvar ruby-ts--operators-assignment
-  '("=" "+=" "-=" "*=" "/=" "%=" "**=")
-  "Ruby assignment operators for tree-sitter font-locking.")
-
-(defvar ruby-ts--operators-bitwise
-  '("&" "|" "^" "~" "<<" ">>")
-  "Ruby bitwise operators for tree-sitter font-locking.")
-
-(defvar ruby-ts--operators-logical
-  '("!" "&&" "and" "not" "or" "||")
-  "Ruby logical operators for tree-sitter font-locking.")
-
-(defvar ruby-ts--operators-ternary
-  '("?" ":")
-  "Ruby ternary operators for tree-sitter font-locking.")
-
-(defvar ruby-ts--operators-range
-  '(".." "...")
-  "Ruby range operators for tree-sitter font-locking.")
-
-(defvar ruby-ts--operators-defined
-  '("defined?")
-  "Ruby defined? operators for tree-sitter font-locking.")
-
-(defvar ruby-ts--operators-dot-colon
-  '("." "::")
-  "Ruby dot and double colon operators for tree-sitter font-locking.")
+(defcustom ruby-ts-highlight-predefined-constants t
+  "When non-nil, the pre-defined constants are highlighted.
+They will be highlighted the same way as the pre-defined variables."
+  :type 'boolean)
 
 (defvar ruby-ts--operators
-  (append ruby-ts--operators-arithmetic
-          ruby-ts--operators-comparison
-          ruby-ts--operators-assignment
-          ruby-ts--operators-bitwise
-          ruby-ts--operators-logical
-          ruby-ts--operators-ternary
-          ruby-ts--operators-range
-          ruby-ts--operators-defined
-          ruby-ts--operators-dot-colon)
+  '("+" "-" "*" "/" "%" "**"
+    "==" "!=" ">" "<" ">=" "<=" "<=>" "==="
+    "=" "+=" "-=" "*=" "/=" "%=" "**="
+    "&" "|" "^" "~" "<<" ">>"
+    "!" "&&" "and" "not" "or" "||"
+    "?" ":"
+    ".." "..."
+    "defined?"
+    "." "::")
   "Ruby operators for tree-sitter font-locking.")
 
-(defvar ruby-ts--punctuation '(",")
+(defvar ruby-ts--delimiters '("," ";")
   "Ruby's punctuation characters.")
 
 (defvar ruby-ts--predefined-constants
@@ -340,9 +116,9 @@ as `ruby-ts--predefined'."
   "Ruby predefined global constants.
 These are currently unused")
 
-(defvar ruby-ts--predefined
+(defvar ruby-ts--predefined-variables
   (rx (or "$!" "$@" "$~" "$&" "$‘" "$‘" "$+" "$=" "$/" "$\\" "$," "$;"
-          "$." "$<" "$>" "$_" "$*" "$$" "$?" "$LOAD_PATH"
+          "$." "$<" "$>" "$_" "$*" "$$" "$?" "$:" "$LOAD_PATH"
           "$LOADED_FEATURES" "$DEBUG" "$FILENAME" "$stderr" "$stdin"
           "$stdout" "$VERBOSE" "$-a" "$-i" "$-l" "$-p"
           (seq "$" (+ digit))))
@@ -389,16 +165,13 @@ These are currently unused")
 ;; "nil" (which does not exhibit this issue) is also considered a
 ;; keyword but I removed it and added it as a constant.
 ;;
-(defun ruby-ts--keywords (_language)
-  "Ruby keywords for tree-sitter font-locking.
-Currently LANGUAGE is ignored but shoule be set to `ruby'."
-  (let ((common-keywords
-         '("BEGIN" "END" "alias" "and" "begin" "break" "case" "class"
-           "def" "defined?" "do" "else" "elsif" "end" "ensure" "for"
-           "if" "in" "module" "next" "not" "or" "redo" "rescue"
-           "retry" "return" "then" "undef" "unless" "until" "when"
-           "while" "yield")))
-    common-keywords))
+(defvar ruby-ts--keywords
+  '("BEGIN" "END" "alias" "and" "begin" "break" "case" "class"
+    "def" "defined?" "do" "else" "elsif" "end" "ensure" "for"
+    "if" "in" "module" "next" "not" "or" "redo" "rescue"
+    "retry" "return" "then" "undef" "unless" "until" "when"
+    "while" "yield")
+  "Ruby keywords for tree-sitter font-locking.")
 
 (defun ruby-ts--comment-font-lock (node override start end &rest _)
   "Apply font lock to comment NODE within START and END.
@@ -415,12 +188,13 @@ values of OVERRIDE"
     (if (and (>= node-start start)
              (<= plus-1 end)
              (string-match-p "\\`#" text))
-        (treesit-fontify-with-override node-start plus-1 font-lock-comment-delimiter-face override))
-    (treesit-fontify-with-override (max plus-1 start) (min node-end end) font-lock-comment-face override)))
+        (treesit-fontify-with-override node-start plus-1
+                                       font-lock-comment-delimiter-face override))
+    (treesit-fontify-with-override (max plus-1 start) (min node-end end)
+                                   font-lock-comment-face override)))
 
 (defun ruby-ts--font-lock-settings (language)
-  "Tree-sitter font-lock settings.
-Currently LANGUAGE is ignored but should be set to `ruby'."
+  "Tree-sitter font-lock settings for Ruby."
   (treesit-font-lock-rules
    :language language
    :feature 'comment
@@ -428,13 +202,13 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 
    :language language
    :feature 'builtin
-   `(((global_variable) @var (:match ,ruby-ts--predefined @var)) @font-lock-builtin-face
-     ,@(when ruby-ts-mode-include-predefined-constants
+   `(((global_variable) @var (:match ,ruby-ts--predefined-variables @var)) @font-lock-builtin-face
+     ,@(when ruby-ts-highlight-predefined-constants
          `(((constant) @var (:match ,ruby-ts--predefined-constants @var)) @font-lock-builtin-face)))
 
    :language language
    :feature 'keyword
-   `([,@(ruby-ts--keywords language)] @font-lock-keyword-face)
+   `([,@ruby-ts--keywords] @font-lock-keyword-face)
 
    :language language
    :feature 'constant
@@ -442,15 +216,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
      (false) @font-lock-doc-markup-face
      (nil) @font-lock-doc-markup-face
      (self) @font-lock-doc-markup-face
-     (super)  @font-lock-doc-markup-face)
-
-   ;; :language language
-   ;; :feature 'constant-assignment
-   ;; :override t
-   ;; '((assignment
-   ;;    left: (constant) @tbd-constant-assignment-face)
-   ;;   (assignment
-   ;;    left: (scope_resolution name: (constant) @tbd-constant-assignment-face)))
+     (super) @font-lock-doc-markup-face)
 
    :language language
    :feature 'symbol
@@ -479,10 +245,14 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
    `("!" @font-lock-negation-char-face
      [,@ruby-ts--operators] @font-lock-operator-face)
 
+   ;; TODO: Consider using a different face for string delimiters.
+   ;; font-lock-delimiter-face is not a good choice, though, because it
+   ;; looks like 'default' in the default theme, and its documented purpose
+   ;; is characters like commas, semicolons, etc.
    :language language
-   :feature 'delimiter
-   '((delimited_symbol [ ":\"" "\"" ] @font-lock-delimiter-face)
-     (string "\"" @font-lock-delimiter-face)
+   :feature 'string
+   '((delimited_symbol [ ":\"" "\"" ] @font-lock-string-face)
+     (string "\"" @font-lock-string-face)
      (string_array [ "%w(" ")" ] @font-lock-delimiter-face)
      (subshell "`" @font-lock-delimiter-face)
      (symbol_array [ "%i(" ")"] @font-lock-delimiter-face))
@@ -504,42 +274,29 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
    '((constant) @font-lock-type-face)
 
    :language language
-   :feature 'global-assignment
-   '((assignment
-      left: (global_variable) @font-lock-property-face))
-
-   :language language
    :feature 'global
    '((global_variable) @font-lock-variable-name-face)
-
-   :language language
-   :feature 'instance-assignment
-   '((assignment
-      left: (instance_variable) @font-lock-property-face))
 
    :language language
    :feature 'instance
    '((instance_variable) @font-lock-variable-name-face)
 
    :language language
+   :feature 'method-definition
+   '((method
+      name: (identifier) @font-lock-function-name-face)
+     (singleton_method
+      name: (identifier) @font-lock-function-name-face)
+     (method
+      name: (setter) @font-lock-function-name-face))
+
+   ;; Yuan recommends also putting method definitions into the
+   ;; 'function' category (thus keeping it in both).  I've opted to
+   ;; just use separate categories for them -- dgutov.
+   :language language
    :feature 'function
    '((call
-      method: (identifier) @font-lock-function-name-face)
-     (method
-      name: (identifier) @font-lock-function-name-face))
-
-   ;; :language language
-   ;; :feature 'variable
-   ;; '((identifier) @tbd-variable-face)
-
-   ;; :language language
-   ;; :feature 'variable-assignment
-   ;; '((assignment
-   ;;    left: (identifier) @tbd-lvalue)
-   ;;   (assignment
-   ;;    left: (left_assignment_list (identifier) @tbd-lvalue))
-   ;;   (operator_assignment
-   ;;    left: (identifier) @tbd-lvalue))
+      method: (identifier) @font-lock-function-name-face))
 
    :language language
    :feature 'error
@@ -556,7 +313,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'."
 
    :language language
    :feature 'punctuation
-   `(([,@ruby-ts--punctuation] @font-lock-punctuation-face))))
+   `(([,@ruby-ts--delimiters] @font-lock-delimiter-face))))
 
 (defun ruby-ts--first-non-comment-child (node)
   "Return the first named child of NODE that is not a comment."
@@ -617,24 +374,9 @@ Returns bol of the current line if PRED returns nil."
         (back-to-indentation)
         (point)))))
 
-(defun ruby-ts--grand-parent-is (type)
-  "Check grand parent's type matches regexp TYPE."
-  (lambda (_n parent &rest _)
-    (string-match-p type (treesit-node-type (treesit-node-parent parent)))))
-
 (defun ruby-ts--grand-parent-node (_n parent &rest _)
   "Return parent of PARENT node."
   (treesit-node-parent parent))
-
-(defun ruby-ts--ancestor-start (type)
-  "Return start of closest ancestor matching regexp TYPE."
-  (lambda (node &rest _)
-    (treesit-node-start (treesit-parent-until node (ruby-ts--type-pred type)))))
-
-(defun ruby-ts--ancestor-is (type)
-  "Check that ancestor's type matches regexp TYPE."
-  (lambda (node &rest _)
-    (treesit-parent-until node (ruby-ts--type-pred type))))
 
 (defun ruby-ts--align-chain-p (&rest _)
   "Return value of `ruby-align-chained-calls'."
@@ -675,8 +417,8 @@ PARENT will be method_parameters.  NODE can be the close paren."
 (defun ruby-ts--param-indent (_n parent &rest _)
   "Indent parameters that start on next line.
 Given: NODE is the parameter.  PARENT is
-method_parameters.  `ruby-ts--same-line-params-p' is nil.  Indent
-according to `ruby-method-params-indent'
+method_parameters.  `ruby-ts--same-line-params-p' is nil.
+Indent according to `ruby-method-params-indent'.
 
 If `ruby-method-params-indent' is 0
 def foo(
@@ -718,9 +460,6 @@ array or hash."
          (first-child (ruby-ts--first-non-comment-child parent)))
     (= (ruby-ts--lineno open-brace) (ruby-ts--lineno first-child))))
 
-(defalias 'ancestor-node #'ruby-ts--ancestor-is
-  "Return ancestor node whose type matches regexp TYPE.")
-
 (defun ruby-ts--assignment-ancestor (node &rest _)
   "Return the assignment ancestor of NODE if any."
   (treesit-parent-until node (ruby-ts--type-pred "\\`assignment\\'")))
@@ -759,14 +498,13 @@ i.e. expr of def foo(args) = expr is returned."
     (when method
       (if (equal "=" (treesit-node-type (treesit-node-child method 3 nil)))
           (treesit-node-child method 4 nil)))))
-      
+
 ;;
 ;; end of functions that can be used for queries
 ;;
 
-(defun ruby-ts--indent-styles (_language)
-  "Indent rules supported by `ruby-ts-mode'.
-Currently LANGUAGE is ignored but should be set to `ruby'"
+(defun ruby-ts--indent-rules ()
+  "Indent rules supported by `ruby-ts-mode'."
   (let ((common
          `(
            ;; Slam all top level nodes to the left margin
@@ -796,7 +534,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;;      as a block_statement.
            ;;
            ;; I'm using very restrictive patterns hoping to reduce rules
-           ;;triggering unintentionally.
+           ;; triggering unintentionally.
            ((match "else" "if")
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
            ((match "elsif" "if")
@@ -804,7 +542,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((match "end" "if")
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
            ((n-p-gp nil "then\\|else\\|elsif" "if\\|unless")
-            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-indent-level)
 
            ;; case expression: when, in_clause, and else are all
            ;; children of case.  when and in_clause have pattern and
@@ -819,9 +557,9 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
            ((match "end" "case")
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
-           ((n-p-gp nil "then" "when") grand-parent ruby-ts-mode-indent-offset)
-           ((n-p-gp nil "then" "in_clause") grand-parent ruby-ts-mode-indent-offset)
-           ((n-p-gp nil "else" "case") parent ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "then" "when") grand-parent ruby-indent-level)
+           ((n-p-gp nil "then" "in_clause") grand-parent ruby-indent-level)
+           ((n-p-gp nil "else" "case") parent ruby-indent-level)
 
            ;; The beauty of inconsistency :-)
            ;; while / until have only "do" as a child.  The "end" is a
@@ -829,21 +567,20 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp "end" "do" "while\\|until")
             (ruby-ts--align-keywords ruby-ts--grand-parent-node) 0)
            ((n-p-gp nil "do" "while\\|until")
-            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
-            
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-indent-level)
            ;; begin can have rescue, ensure, else, and end.
            ;; statements are a child of begin.  rescue, ensure, else,
            ;; and end are also children of begin.  rescue has a then
            ;; as a child thus statements will be grand children of
            ;; rescue.
            ((n-p-gp nil "then" "rescue")
-            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-indent-level)
            ((n-p-gp nil "ensure\\|else" "begin")
-            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-indent-level)
            ((match "rescue\\|ensure\\|else\\|end" "begin")
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
-           ((parent-is "begin")         ;last
-            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-ts-mode-indent-offset)
+           ((parent-is "begin")           ;last
+            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-indent-level)
 
            ;; for ... I don't think I have ever used a for loop in
            ;; Ruby.  The "in" (not an in_clause) and "do" are
@@ -852,7 +589,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ((n-p-gp "end" "do" "for")
             (ruby-ts--align-keywords ruby-ts--grand-parent-node) 0)
            ((n-p-gp nil "do" "for")
-            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-indent-level)
 
            ;; method has a "body_statement" and the "end" as children.
            ;; The body_statement can have rescue, ensure, and else as
@@ -863,22 +600,22 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
             (ruby-ts--align-keywords ruby-ts--parent-node) 0)
            ((n-p-gp "\\`\\(rescue\\|ensure\\|else\\)\\'" "body_statement" ,ruby-ts--method-regex)
             (ruby-ts--align-keywords ruby-ts--grand-parent-node) 0)
-           ((n-p-gp nil "rescue\\|ensure\\|else" "body_statement") parent ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "rescue\\|ensure\\|else" "body_statement") parent ruby-indent-level)
            ((match "body_statement" ,ruby-ts--method-regex) ;first statement
-            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--parent-node) ruby-indent-level)
            ((n-p-gp nil "body_statement" ,ruby-ts--method-regex) ;other statements
-            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--align-keywords ruby-ts--grand-parent-node) ruby-indent-level)
 
            ;; Chained calls:
            ;; if `ruby-align-chained-calls' is true, the first query
            ;; matches and the node is aligned under the first dot (.);
            ;; else the second query aligns
-           ;; `ruby-ts-mode-indent-offset' spaces in from the parent.
+           ;; `ruby-indent-level' spaces in from the parent.
            ((and ruby-ts--align-chain-p (match "\\." "call")) ruby-ts--align-chain 0)
-           ((match "\\." "call") parent ruby-ts-mode-indent-offset)
+           ((match "\\." "call") parent ruby-indent-level)
 
            ;; ruby-indent-after-block-in-continued-expression
-           ((match "begin" "assignment") parent ruby-ts-mode-indent-offset)
+           ((match "begin" "assignment") parent ruby-indent-level)
 
            ;; method parameters -- four styles:
            ;; 1) With paren, first arg on same line:
@@ -892,7 +629,7 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; ;; 2) With paren, first arg on next line, ruby-method-params-indent eq t
            ;; ;; 3) With paren, first arg on next line, ruby-method-params-indent neq t
            ((and (query "(method_parameters \"(\" _ @indent)") (node-is ")")) ruby-ts--param-indent 0)
-           ((query "(method_parameters \"(\" _ @indent)") ruby-ts--param-indent ruby-ts-mode-indent-offset)
+           ((query "(method_parameters \"(\" _ @indent)") ruby-ts--param-indent ruby-indent-level)
            ;; 4) No paren:
            ((parent-is "method_parameters") first-sibling 0)
 
@@ -910,12 +647,12 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
                  (node-is ")"))
             (ruby-ts--bol ruby-ts--grand-parent-node) 0)
            ((query "(argument_list \"(\" _ @indent)")
-            (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--bol ruby-ts--grand-parent-node) ruby-indent-level)
            ;; 3) No paren, ruby-parenless-call-arguments-indent is t
            ((and ruby-ts--parenless-call-arguments-indent-p (parent-is "argument_list"))
             first-sibling 0)
            ;; 4) No paren, ruby-parenless-call-arguments-indent is nil
-           ((parent-is "argument_list") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+           ((parent-is "argument_list") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-indent-level)
 
            ;; Old... probably too simple
            ((parent-is "block_parameters") first-sibling 1)
@@ -952,38 +689,38 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
             grand-parent 0)
            ((and (n-p-gp "pair" "hash" "pair")
                  (not ruby-ts--same-line-hash-array-p))
-            grand-parent ruby-ts-mode-indent-offset)
+            grand-parent ruby-indent-level)
            ((and (n-p-gp "}" "hash" "method")
                  (not ruby-ts--same-line-hash-array-p))
             grand-parent 0)
            ((and (n-p-gp "pair" "hash" "method")
                  (not ruby-ts--same-line-hash-array-p))
-            grand-parent ruby-ts-mode-indent-offset)
+            grand-parent ruby-indent-level)
 
            ((n-p-gp "}" "hash" "assignment")  (ruby-ts--bol ruby-ts--grand-parent-node) 0)
-           ((n-p-gp nil "hash" "assignment")  (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "hash" "assignment")  (ruby-ts--bol ruby-ts--grand-parent-node) ruby-indent-level)
            ((n-p-gp "]" "array" "assignment") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
-           ((n-p-gp nil "array" "assignment") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "array" "assignment") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-indent-level)
 
            ((n-p-gp "}" "hash" "argument_list")  first-sibling 0)
-           ((n-p-gp nil "hash" "argument_list")  first-sibling ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "hash" "argument_list")  first-sibling ruby-indent-level)
            ((n-p-gp "]" "array" "argument_list") first-sibling 0)
-           ((n-p-gp nil "array" "argument_list") first-sibling ruby-ts-mode-indent-offset)
+           ((n-p-gp nil "array" "argument_list") first-sibling ruby-indent-level)
 
            ((match "}" "hash")  first-sibling 0)
-           ((parent-is "hash")  first-sibling ruby-ts-mode-indent-offset)
+           ((parent-is "hash")  first-sibling ruby-indent-level)
            ((match "]" "array") first-sibling 0)
-           ((parent-is "array") first-sibling ruby-ts-mode-indent-offset)
-           
+           ((parent-is "array") first-sibling ruby-indent-level)
+
            ;; If the previous method isn't finished yet, this will get
            ;; the next method indented properly.
            ((n-p-gp ,ruby-ts--method-regex "body_statement" ,ruby-ts--class-or-module-regex)
-            (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+            (ruby-ts--bol ruby-ts--grand-parent-node) ruby-indent-level)
 
            ;; Match the end of a class / modlue
            ((match "end" ,ruby-ts--class-or-module-regex) parent 0)
 
-           ;; a "do_block" has a "body_statement" child which has the
+           ;; A "do_block" has a "body_statement" child which has the
            ;; statements as children within it.  The problem is that
            ;; the first statement starts at the same point as the
            ;; body_statement and so treesit-simple-indent is called
@@ -991,19 +728,19 @@ Currently LANGUAGE is ignored but should be set to `ruby'"
            ;; but with node set to the statement and parent set to
            ;; body_statement for all others. ... Fine.  Be that way.
            ;; Ditto for "block" and "block_body"
-           ((node-is "body_statement") parent-bol ruby-ts-mode-indent-offset)
-           ((parent-is "body_statement") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+           ((node-is "body_statement") parent-bol ruby-indent-level)
+           ((parent-is "body_statement") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-indent-level)
            ((match "end" "do_block") parent-bol 0)
-           ((n-p-gp "block_body" "block" nil) parent-bol ruby-ts-mode-indent-offset)
-           ((n-p-gp nil "block_body" "block") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-ts-mode-indent-offset)
+           ((n-p-gp "block_body" "block" nil) parent-bol ruby-indent-level)
+           ((n-p-gp nil "block_body" "block") (ruby-ts--bol ruby-ts--grand-parent-node) ruby-indent-level)
            ((match "}" "block") (ruby-ts--bol ruby-ts--grand-parent-node) 0)
 
            ;; Chained strings
            ((match "string" "chained_string") first-sibling 0)
 
            ;; Try and indent two spaces when all else fails.
-           (catch-all parent-bol ruby-ts-mode-indent-offset))))
-    `((base ,@common))))
+           (catch-all parent-bol ruby-indent-level))))
+    `((ruby . ,common))))
 
 (defun ruby-ts--class-or-module-p (node)
   "Predicate if NODE is a class or module."
@@ -1053,16 +790,6 @@ NODE into a list of imenu ( name . pos ) nodes"
          (nodes (treesit-induce-sparse-tree root "^\\(method\\|alias\\|class\\|module\\)$")))
     (ruby-ts--imenu-helper nodes)))
 
-(defun ruby-ts--set-indent-style (language)
-  "Helper function to set the indentation style.
-Currently LANGUAGE is ignored but should be set to `ruby'."
-  (let ((style
-         (if (functionp ruby-ts-mode-indent-style)
-             (funcall ruby-ts-mode-indent-style)
-           (pcase ruby-ts-mode-indent-style
-             ('base (alist-get 'base (ruby-ts--indent-styles language)))))))
-    `((,language ,@style))))
-
 (defun ruby-ts--arrow-up-start (arg)
   "Move to the start ARG levels up or out."
   (interactive "p")
@@ -1090,7 +817,7 @@ Assumes NODE's type is \"class\" or \"method\""
      node
      (if (equal "singleton_class" (treesit-node-type node)) "value" "name"))
     t)))
-  
+
 (defun ruby-ts--method-name (node)
   "Return the method name of NODE.
 Assumes NODE's type is method or singleton_method."
@@ -1110,7 +837,7 @@ Assumes NODE's type is method or singleton_method."
                     (treesit-node-text n t))
                   (list first third)))))))
 
-(defun ruby-ts--log-current-function ()
+(defun ruby-ts-add-log-current-function ()
   "Return the current method name as a string.
 The hash (#) is for instance methods only which are methods
 \"defined on a class\" -- which is 99% of methods.  Otherwise, a
@@ -1153,26 +880,39 @@ leading double colon is not added."
         (concat result sep method-name)
       result)))
 
-(defvar-keymap ruby-ts--arrow-keys
-  :doc "Transient keymap for arrow keys"
-  ;; "<right>" #'ruby-ts-forward-argument-start
-  "<right>" #'ruby-ts--forward-statement-start
-  "<up>"    #'ruby-ts--arrow-up-start
-  )
-  
 (defvar-keymap ruby-ts-mode-map
   :doc "Keymap used in Ruby mode"
   :parent prog-mode-map
-  "C-M-h"     #'ruby-ts--mark-method
-  "H-<right>"  #'ruby-ts--mark-statement
-  "s-<right>"  #'ruby-ts--forward-method
-  "M-<left>"  #'ruby-ts--raw-prev-sibling
-  "M-<right>" #'ruby-ts--raw-next-sibling
-  "C-c" ruby-ts--arrow-keys)
+  ;; (when ruby-use-smie
+  ;;   (define-key map (kbd "M-C-d") 'smie-down-list))
+  ;; (define-key map (kbd "M-C-p") 'ruby-beginning-of-block)
+  ;; (define-key map (kbd "M-C-n") 'ruby-end-of-block)
+  "C-c {" #'ruby-toggle-block
+  "C-c '" #'ruby-toggle-string-quotes
+  "C-c C-f" #'ruby-find-library-file)
 
-(define-derived-mode ruby-ts-base-mode prog-mode "Ruby"
+;;;###autoload
+(define-derived-mode ruby-ts-mode prog-mode "Ruby"
   "Major mode for editing Ruby, powered by tree-sitter."
-  :syntax-table ruby-ts--syntax-table
+  :group 'ruby
+  :syntax-table ruby-mode-syntax-table
+
+  (setq indent-tabs-mode ruby-indent-tabs-mode)
+
+  (setq-local paragraph-start (concat "$\\|" page-delimiter))
+  (setq-local paragraph-separate paragraph-start)
+  (setq-local paragraph-ignore-fill-prefix t)
+
+  (setq-local comment-start "# ")
+  (setq-local comment-end "")
+  (setq-local comment-start-skip "#+ *")
+
+  (unless (treesit-ready-p 'ruby)
+    (error "Tree-sitter for Ruby isn't available"))
+
+  (treesit-parser-create 'ruby)
+
+  (setq-local add-log-current-defun-function #'ruby-ts-add-log-current-function)
 
   ;; Navigation.
   (setq-local treesit-defun-type-regexp ruby-ts--method-regex)
@@ -1183,42 +923,19 @@ leading double colon is not added."
   ;; Imenu.
   (setq-local imenu-create-index-function #'ruby-ts--imenu)
 
-  ;; seems like this could be defined when I know more how tree sitter
-  ;; works.
-  (setq-local which-func-functions nil)
-
-  ;; FIXME -- make this a customizable variable so the user can
-  ;; configure his own levels easily.
-  (setq-local treesit-font-lock-feature-list
-              '(( comment )
-                ( keyword regexp string type)
-                ( builtin constant constant-assignment
-                  delimiter escape-sequence function global
-                  global-assignment instance instance-assignment
-                  interpolation literal symbol variable variable-assignment )
-                ( bracket error operator punctuation ))))
-
-;;;###autoload
-(define-derived-mode ruby-ts-mode ruby-ts-base-mode "Ruby"
-  "Major mode for editing Ruby, powered by tree-sitter."
-  :group 'ruby
-
-  (unless (treesit-ready-p 'ruby)
-    (error "Tree-sitter for Ruby isn't available"))
-
-  (treesit-parser-create 'ruby)
-
-  (setq-local add-log-current-defun-function #'ruby-ts--log-current-function)
-
-  ;; Comments.
-  (setq-local comment-start "# ")
-  (setq-local comment-end "")
-  (setq-local comment-start-skip "#+ *")
-
-  (setq-local treesit-simple-indent-rules (ruby-ts--set-indent-style 'ruby))
+  (setq-local treesit-simple-indent-rules (ruby-ts--indent-rules))
 
   ;; Font-lock.
   (setq-local treesit-font-lock-settings (ruby-ts--font-lock-settings 'ruby))
+  ;; Level 3 is the default.
+  (setq-local treesit-font-lock-feature-list
+              '(( comment method-definition )
+                ( keyword regexp string type)
+                ( builtin constant
+                  delimiter escape-sequence global
+                  instance
+                  interpolation literal symbol variable)
+                ( bracket error function operator punctuation)))
 
   (treesit-major-mode-setup))
 
