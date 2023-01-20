@@ -10,18 +10,18 @@ This is where I am going to keep notes as I develop the
 I'm hoping not to forget some steps I did...
 
 1) Initial set up:
-   
-   1. =git clone git@github.com:casouri/tree-sitter-module.git=
-   2. =cd tree-sitter-module=
-   3. =./build.sh ruby=
-   4. =mkdir ~/.config/emacs/tree-sitter=
-   5. =mv dist/libtree-sitter-ruby.dylib ~/.config/emacs/tree-sitter=
+
+   1. ~M-x treesit-install-language-grammar~
+   2. Write =ruby= when prompted for the language.
+   2. Answer ~y~ to building interactively.
+   3. Paste =https://github.com/tree-sitter/tree-sitter-ruby= when asked for the repo.
+   4. Pick default answers for the remaining questions.
+   5. Wait for the success message in the message area.
 
 2) Loaded a Ruby file and did ~M-: (treesit-parser-create 'ruby)~
    which returned ~#<treesit-parser for ruby>~... I guess that's good.
-   
+
 3) ~(treesit-parser-list)~ to check the list of parsers for the
    current buffer.
 
 4) ~M-x treesit-inspect-mode~ and it seemed happy.
-   
